@@ -8,6 +8,7 @@
 import type { AxiosInstance, AxiosRequestConfig } from "axios";
 import { create } from "axios";
 import { normalizeAPIRequestURL } from "@plane/services";
+import { getSignInRedirectUrl } from "@/helpers/next-path.helper";
 
 export abstract class APIService {
   protected baseURL: string;
@@ -48,7 +49,7 @@ export abstract class APIService {
           // letting the sign-in screen render. Only bounce away from private
           // routes.
           if (currentPath !== "/") {
-            window.location.replace(`/${currentPath ? `?next_path=${encodeURIComponent(currentPath)}` : ``}`);
+            window.location.replace(getSignInRedirectUrl(currentPath, window.location.search));
           }
         }
         return Promise.reject(error);

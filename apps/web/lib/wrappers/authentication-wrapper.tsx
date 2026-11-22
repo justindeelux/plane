@@ -13,6 +13,7 @@ import { LogoSpinner } from "@/components/common/logo-spinner";
 // helpers
 import { isValidNextPath } from "@plane/utils";
 import { EPageTypes } from "@/helpers/authentication.helper";
+import { getSignInRedirectUrl } from "@/helpers/next-path.helper";
 // hooks
 import { useWorkspace } from "@/hooks/store/use-workspace";
 import { useUser, useUserProfile, useUserSettings } from "@/hooks/store/user";
@@ -115,7 +116,7 @@ export const AuthenticationWrapper = observer(function AuthenticationWrapper(pro
 
   if (pageType === EPageTypes.ONBOARDING) {
     if (!currentUser?.id) {
-      router.push(`/${pathname ? `?next_path=${encodeURIComponent(pathname + search)}` : ``}`);
+      router.push(getSignInRedirectUrl(pathname, search));
       return <></>;
     } else {
       if (currentUser && currentUserProfile?.id && isUserOnboard) {
@@ -128,7 +129,7 @@ export const AuthenticationWrapper = observer(function AuthenticationWrapper(pro
 
   if (pageType === EPageTypes.SET_PASSWORD) {
     if (!currentUser?.id) {
-      router.push(`/${pathname ? `?next_path=${encodeURIComponent(pathname + search)}` : ``}`);
+      router.push(getSignInRedirectUrl(pathname, search));
       return <></>;
     } else {
       if (currentUser && !currentUser?.is_password_autoset && currentUserProfile?.id && isUserOnboard) {
@@ -147,7 +148,7 @@ export const AuthenticationWrapper = observer(function AuthenticationWrapper(pro
         return <></>;
       }
     } else {
-      router.push(`/${pathname ? `?next_path=${encodeURIComponent(pathname + search)}` : ``}`);
+      router.push(getSignInRedirectUrl(pathname, search));
       return <></>;
     }
   }
