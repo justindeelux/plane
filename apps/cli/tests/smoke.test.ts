@@ -35,6 +35,8 @@ beforeAll(async () => {
     const ok = req.headers["x-api-key"] === "good";
     res.setHeader("content-type", "application/json");
     if (!ok) return void res.writeHead(401).end('{"error":"Given API token is not valid"}');
+    if (req.url === "/api/v1/empty/") return void res.writeHead(req.method === "DELETE" ? 204 : 200).end();
+    if (req.url === "/api/v1/html/") return void res.end("<html>");
     if (req.url === "/api/v1/users/me/") return void res.end('{"id":"u1","display_name":"justin"}');
     if (req.url?.startsWith("/api/v1/workspaces/acme/projects/")) return void res.end('{"results":[]}');
     res.writeHead(404).end('{"error":"Not found."}');
@@ -98,6 +100,24 @@ describe("built bin", () => {
     r = await plane(["api", "nothing/"]);
     expect(r.code).toBe(4);
     expect(r.err).toMatch(/^✗ 404/);
+
+    // empty/malformed 2xx: failure for POST/PUT, fine for GET and DELETE 204
+    r = await plane(["api", "empty/", "-X", "POST"]);
+    expect(r.code).toBe(1);
+    expect(r.out).toBe("");
+    expect(r.err).toMatch(/^✗ POST empty\/ returned an empty 200 response/);
+    r = await plane(["api", "empty/", "-X", "POST", "--json"]);
+    expect(r.code).toBe(1);
+    expect(JSON.parse(r.out)).toMatchObject({ ok: false, error: { code: "empty_response", status: 200 } });
+    r = await plane(["api", "html/", "-X", "PUT"]);
+    expect(r.code).toBe(1);
+    expect(r.err).toMatch(/non-JSON/);
+    r = await plane(["api", "empty/"]);
+    expect(r.code).toBe(0);
+    expect(r.out).toBe("✓ GET /empty/: 200 OK\n");
+    r = await plane(["api", "empty/", "-X", "DELETE"]);
+    expect(r.code).toBe(0);
+    expect(r.out).toMatch(/^✓ DELETE \/empty\/: 204/);
 
     r = await plane(["auth", "logout"]);
     expect(r.out).toMatch(/^✓ Logged out of 127\.0\.0\.1/);

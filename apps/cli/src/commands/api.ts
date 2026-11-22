@@ -5,6 +5,7 @@
  */
 
 import type { Command } from "commander";
+import { WRITE } from "../client";
 import { getClient } from "../context";
 import { usageError } from "../errors";
 import { print, run, success } from "../output";
@@ -37,6 +38,8 @@ export const registerApi = (program: Command) => {
           p,
           method === "GET" ? { query: fields } : hasFields ? { body: fields } : {}
         );
+        // POST/PATCH/PUT must return a well-formed body (same rule as Client.request); GET/DELETE may be empty.
+        if (WRITE.has(method)) client.parseBody(method, p, res);
         if (!res.text.trim())
           return success(`${method} /${p}: ${res.status} ${res.statusText}`.trim(), "request", { status: res.status });
         let out = res.text;

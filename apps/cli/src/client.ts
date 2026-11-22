@@ -32,7 +32,7 @@ export interface Page<T> {
   next_page_results?: boolean;
 }
 
-const WRITE = new Set(["POST", "PATCH", "PUT"]);
+export const WRITE = new Set(["POST", "PATCH", "PUT"]);
 const defaultSleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 const retryDelay = (header: string | null, attempt: number): number => {
@@ -127,12 +127,10 @@ export class Client {
     }
   }
 
-  /** Parsed JSON request. Writes (and any `expect`) must return a non-empty, well-formed object. */
-  async request<T = unknown>(method: string, path: string, opts: RequestOptions = {}): Promise<T> {
-    const res = await this.raw(method, path, opts);
-    const isWrite = WRITE.has(method);
+  /** Empty (except DELETE 204) or non-JSON 2xx bodies are failures. Returns undefined for DELETE 204. */
+  parseBody(method: string, path: string, res: RawResponse): unknown {
     if (!res.text.trim()) {
-      if (method === "DELETE" && res.status === 204) return undefined as T;
+      if (method === "DELETE" && res.status === 204) return undefined;
       throw new CliError(
         `${method} ${path} returned an empty ${res.status} response`,
         EXIT.general,
@@ -140,9 +138,8 @@ export class Client {
         res.status
       );
     }
-    let data: unknown;
     try {
-      data = JSON.parse(res.text);
+      return JSON.parse(res.text);
     } catch {
       throw new CliError(
         `${method} ${path} returned a non-JSON ${res.status} response; is ${this.o.url} a Plane server? (check ${this.o.url}/api/instances/)`,
@@ -151,6 +148,14 @@ export class Client {
         res.status
       );
     }
+  }
+
+  /** Parsed JSON request. Writes (and any `expect`) must return a non-empty, well-formed object. */
+  async request<T = unknown>(method: string, path: string, opts: RequestOptions = {}): Promise<T> {
+    const res = await this.raw(method, path, opts);
+    const isWrite = WRITE.has(method);
+    const data = this.parseBody(method, path, res);
+    if (data === undefined) return undefined as T;
     if (isWrite || opts.expect) {
       const obj = data as Record<string, unknown> | null;
       const missing =

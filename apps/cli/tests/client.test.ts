@@ -9,6 +9,7 @@ import { Client } from "../src/client";
 import { CliError, EXIT } from "../src/errors";
 
 const res = (body: string, init: ResponseInit = {}) => new Response(body, { status: 200, ...init });
+const raw = (text: string, status = 200) => ({ status, statusText: "OK", text });
 const make = (f: ReturnType<typeof vi.fn>, extra = {}) =>
   new Client({
     url: "https://plane.example.com/",
@@ -88,6 +89,14 @@ describe("Client", () => {
     await expect(
       make(vi.fn().mockResolvedValue(new Response(null, { status: 204 }))).delete("x/")
     ).resolves.toBeUndefined();
+  });
+
+  it("parseBody: write needs a JSON body; DELETE 204 and empty GET are the caller's call", () => {
+    const c = make(vi.fn());
+    expect(() => c.parseBody("POST", "empty", raw(""))).toThrow(/empty 200/);
+    expect(() => c.parseBody("PUT", "bad", raw("<html>"))).toThrow(/non-JSON/);
+    expect(c.parseBody("DELETE", "x", raw("", 204))).toBeUndefined();
+    expect(c.parseBody("PATCH", "x", raw('{"id":"1"}'))).toEqual({ id: "1" });
   });
 
   it("follows cursor pagination", async () => {
