@@ -96,6 +96,28 @@ describe("built bin", () => {
     expect(v.out).toMatch(/--workspace/);
   });
 
+  it("-h/--help on every leaf command prints that command's own usage (exit 0, stdout)", async () => {
+    // Enumerate the command tree from the built bin's own help output.
+    const leaves: string[][] = [];
+    const walk = async (path: string[]) => {
+      const { out } = await plane([...path, "--help"]);
+      const section = out.split(/^Commands:\n/m)[1]?.split(/\n\n/)[0] ?? "";
+      const subs = [...section.matchAll(/^ {2}([a-z][\w-]*)/gm)].map((m) => m[1]).filter((n) => n !== "help");
+      if (!subs.length) return void leaves.push(path);
+      await Promise.all(subs.map((s) => walk([...path, s])));
+    };
+    await walk([]);
+    expect(leaves.length).toBeGreaterThanOrEqual(14);
+    const runs = leaves.flatMap((leaf) => ["-h", "--help"].map((flag) => ({ leaf, flag })));
+    const results = await Promise.all(runs.map(({ leaf, flag }) => plane([...leaf, flag])));
+    results.forEach((r, i) => {
+      const name = `${runs[i].leaf.join(" ")} ${runs[i].flag}`;
+      expect(r.code, name).toBe(0);
+      expect(r.err, name).toBe("");
+      expect(r.out.startsWith(`Usage: plane ${runs[i].leaf.join(" ")} `), name).toBe(true);
+    });
+  });
+
   it("auth status while logged out says so (stderr, exit 3), never empty", async () => {
     const r = await plane(["auth", "status"]);
     expect(r.code).toBe(3);
