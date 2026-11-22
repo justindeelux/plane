@@ -6,7 +6,7 @@
 
 import { spawn } from "node:child_process";
 import { createServer, type Server } from "node:http";
-import { mkdtempSync, rmSync, statSync } from "node:fs";
+import { chmodSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -14,11 +14,18 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 const bin = join(import.meta.dirname, "..", "dist", "index.mjs");
 const home = mkdtempSync(join(tmpdir(), "plane-cli-smoke-"));
+// Stub browser launchers so a login test never opens a real browser; they log the URL they were given.
+const stubs = mkdtempSync(join(tmpdir(), "plane-cli-stubs-"));
+const opened = join(stubs, "opened.log");
+for (const n of ["open", "xdg-open"]) {
+  writeFileSync(join(stubs, n), `#!/bin/sh\necho "$@" >> ${opened}\n`);
+  chmodSync(join(stubs, n), 0o755);
+}
 // Async spawn: the fake server lives in this process, so the event loop must stay free.
 const plane = (args: string[], input?: string, env: Record<string, string> = {}) =>
   new Promise<{ out: string; err: string; code: number | null }>((resolve) => {
     const c = spawn(process.execPath, [bin, ...args], {
-      env: { PATH: process.env.PATH ?? "", XDG_CONFIG_HOME: home, ...env },
+      env: { PATH: `${stubs}:${process.env.PATH ?? ""}`, XDG_CONFIG_HOME: home, ...env },
     });
     let out = "";
     let err = "";
@@ -28,12 +35,35 @@ const plane = (args: string[], input?: string, env: Record<string, string> = {})
     c.stdin.end(input ?? "");
   });
 
+let polls = 0;
+let mode: "approve" | "deny" | "expire" = "approve";
 let server: Server;
 let url: string;
 beforeAll(async () => {
   server = createServer((req, res) => {
-    const ok = req.headers["x-api-key"] === "good";
+    const ok = req.headers["x-api-key"] === "good" || req.headers["x-api-key"] === "devtok";
     res.setHeader("content-type", "application/json");
+    if (req.url === "/api/instances/") return void res.end('{"instance":{}}');
+    if (req.url === "/auth/device/code/") {
+      polls = 0;
+      return void res.end(
+        JSON.stringify({
+          device_code: "dc",
+          user_code: "ABCD-EFGH",
+          verification_uri: `${url}/device`,
+          verification_uri_complete: `${url}/device?user_code=ABCD-EFGH`,
+          expires_in: 600,
+          interval: 1,
+        })
+      );
+    }
+    if (req.url === "/auth/device/token/") {
+      const err = (e: string) => void res.writeHead(400).end(JSON.stringify({ error: e }));
+      if (mode === "expire") return err("expired_token");
+      if (mode === "deny") return err("access_denied");
+      if (++polls < 2) return err("authorization_pending");
+      return void res.end('{"token":"devtok","workspace_slug":"acme"}');
+    }
     if (!ok) return void res.writeHead(401).end('{"error":"Given API token is not valid"}');
     if (req.url === "/api/v1/empty/") return void res.writeHead(req.method === "DELETE" ? 204 : 200).end();
     if (req.url === "/api/v1/html/") return void res.end("<html>");
@@ -47,6 +77,7 @@ beforeAll(async () => {
 afterAll(() => {
   server.close();
   rmSync(home, { recursive: true, force: true });
+  rmSync(stubs, { recursive: true, force: true });
 });
 
 describe("built bin", () => {
@@ -62,10 +93,49 @@ describe("built bin", () => {
     expect(r.err).toMatch(/✗ not logged in; run `plane auth login`/);
   });
 
-  it("interactive login explains device flow is unavailable", async () => {
+  it("browser login without a URL in a non-TTY is a usage error (exit 2)", async () => {
     const r = await plane(["auth", "login"]);
-    expect(r.code).toBe(1);
+    expect(r.code).toBe(2);
     expect(r.err).toMatch(/--with-token/);
+  });
+
+  it("browser login against a non-Plane URL fails with a hint", async () => {
+    const r = await plane(["auth", "login", "--url", "http://127.0.0.1:1"]);
+    expect(r.code).toBe(5);
+    expect(r.err).toMatch(/cannot reach/);
+  });
+
+  it("device login: pending -> approved, saves 0600 config, prints the success line", async () => {
+    mode = "approve";
+    const r = await plane(["auth", "login", "--url", `${url}/`]);
+    expect(r.code).toBe(0);
+    expect(r.err).toMatch(/! Confirmation code: ABCD-EFGH/);
+    expect(r.out).toMatch(/^✓ Logged in as justin \(workspace: acme\) on 127\.0\.0\.1:\d+\n$/);
+    expect(readFileSync(opened, "utf8")).toContain("/device?user_code=ABCD-EFGH");
+    const file = join(home, "plane", "config.json");
+    expect(statSync(file).mode & 0o777).toBe(0o600);
+    const cfg = JSON.parse(readFileSync(file, "utf8"));
+    expect(cfg.profiles[cfg.current]).toMatchObject({ url, token: "devtok", workspace: "acme" });
+    await plane(["auth", "logout"]);
+  });
+
+  it("device login --json prints only JSON on stdout", async () => {
+    mode = "approve";
+    const r = await plane(["auth", "login", "--url", url, "--json"]);
+    expect(JSON.parse(r.out)).toMatchObject({ ok: true, action: "login", item: { workspace: "acme" } });
+    await plane(["auth", "logout"]);
+  });
+
+  it("device login denied -> exit 3, expired -> exit 3 with re-run hint, nothing saved", async () => {
+    mode = "deny";
+    let r = await plane(["auth", "login", "--url", url]);
+    expect(r.code).toBe(3);
+    expect(r.err).toMatch(/denied/);
+    mode = "expire";
+    r = await plane(["auth", "login", "--url", url]);
+    expect(r.code).toBe(3);
+    expect(r.err).toMatch(/plane auth login/);
+    expect((await plane(["auth", "status"])).code).toBe(3);
   });
 
   it("unknown command is a usage error (exit 2)", async () => {
