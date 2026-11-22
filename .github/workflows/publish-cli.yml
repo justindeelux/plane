@@ -69,7 +69,12 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+          REF_TYPE: ${{ github.ref_type }}
         run: |
+          if [ "$DRY_RUN" != "true" ] && [ "$REF_TYPE" != "tag" ]; then
+            echo "A real publish needs a tag ref; run with dry_run=true or from a cli-v* tag" >&2
+            exit 1
+          fi
           flags="--provenance --access public --no-git-checks"
           if [ "$DRY_RUN" = "true" ]; then flags="$flags --dry-run"; fi
           pnpm publish --filter=@plane/cli $flags

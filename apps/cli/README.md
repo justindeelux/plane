@@ -102,7 +102,7 @@ plane issue close WEB-123
 plane issue reopen WEB-123
 ```
 
-Flags, as in the source:
+Flags:
 
 - `list`: `--state`, `--assignee` (repeatable), `--label` (repeatable, all must match), `--cycle`, `--module`, `--limit` (default 30), plus `--workspace` and `--project`.
 - `view`: `--web` opens the item in your browser.
@@ -132,7 +132,7 @@ Markdown cannot express everything the Plane editor can. Underline, colors, ment
 
 ## Output and exit codes
 
-Each command prints one line to stdout on success and one to stderr on failure:
+Commands that change something print one `✓` line to stdout on success. List and view commands print their table or detail text. Failures print one `✗` line to stderr:
 
 ```
 ✓ Logged in as justin (workspace: acme) on plane.example.com
