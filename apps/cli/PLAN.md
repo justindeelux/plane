@@ -26,7 +26,8 @@ A TypeScript/Node CLI installed with `npm i -g @plane/cli` that connects to a se
 $ plane auth login
 ? Plane server URL: https://plane.example.com
 ! Confirmation code: ABCD-EFGH
-  Opening https://plane.example.com/device in your browser...
+  Opening https://plane.example.com/device?user_code=ABCD-EFGH in your browser...
+  If it does not open, visit https://plane.example.com/device and enter the code
 ✓ Logged in as justin (workspace: acme)
 ```
 

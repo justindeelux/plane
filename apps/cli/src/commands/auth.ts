@@ -55,7 +55,7 @@ const deviceFlow = async (o: { url?: string; workspace?: string }, cmd: Command)
       open: (u) => open(u),
       onCode: (c) => {
         process.stderr.write(
-          `! Confirmation code: ${c.userCode}\n  Opening ${c.verificationUri} in your browser...\n  If it does not open, visit ${c.verificationUriComplete}\n`
+          `! Confirmation code: ${c.userCode}\n  Opening ${c.verificationUriComplete} in your browser...\n  If it does not open, visit ${c.verificationUri} and enter the code\n`
         );
       },
     });
