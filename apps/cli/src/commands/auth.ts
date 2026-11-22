@@ -52,7 +52,8 @@ const deviceFlow = async (o: { url?: string; workspace?: string }, cmd: Command)
   try {
     r = await deviceLogin(url, hostname(), {
       signal: ac.signal,
-      open: (u) => open(u),
+      // PLANE_BROWSER=none: print the URL but do not launch a browser (headless, CI, tests).
+      open: (u) => (process.env.PLANE_BROWSER === "none" ? Promise.resolve() : open(u)),
       onCode: (c) => {
         process.stderr.write(
           `! Confirmation code: ${c.userCode}\n  Opening ${c.verificationUriComplete} in your browser...\n  If it does not open, visit ${c.verificationUri} and enter the code\n`

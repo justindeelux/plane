@@ -1,11 +1,11 @@
-# @plane/cli
+# @jtdeelux/plane-cli
 
 Command line client for a self-hosted [Plane](https://plane.so) server. The binary is `plane`.
 
 ## Install
 
 ```sh
-npm i -g @plane/cli
+npm i -g @jtdeelux/plane-cli
 plane --version
 ```
 
@@ -17,7 +17,7 @@ Needs Node.js 20 or newer.
 plane auth login
 ```
 
-The CLI asks for your server URL (or take it from `--url`), prints a confirmation code, and opens `<server>/device` in your browser. Check that the code matches, pick a workspace, and approve. The CLI stores an API token for that workspace.
+The CLI asks for your server URL (or take it from `--url`), prints a confirmation code, and opens `<server>/device` in your browser. Check that the code matches, pick a workspace, and approve. The CLI stores an API token for that workspace. Set `PLANE_BROWSER=none` to print the URL without launching a browser.
 
 On a machine without a browser, or in CI, read a token from stdin instead. `--workspace` is required in this mode:
 

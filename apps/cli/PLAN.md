@@ -1,6 +1,6 @@
-# Plan: `@plane/cli` (`plane` command)
+# Plan: `@jtdeelux/plane-cli` (`plane` command)
 
-A TypeScript/Node CLI installed with `npm i -g @plane/cli` that connects to a self-hosted Plane server, in the style of `gh`. Users write **Markdown**; the CLI converts to and from the HTML the Plane API uses.
+A TypeScript/Node CLI installed with `npm i -g @jtdeelux/plane-cli` that connects to a self-hosted Plane server, in the style of `gh`. Users write **Markdown**; the CLI converts to and from the HTML the Plane API uses.
 
 ## Decisions
 
@@ -8,7 +8,7 @@ A TypeScript/Node CLI installed with `npm i -g @plane/cli` that connects to a se
 | -------------- | --------------------------------------------------------------------- |
 | Login          | Browser device flow (needs new backend endpoints)                     |
 | v1 scope       | `auth`, `config`, `issue`, `project`, `cycle`, `module`, `api`        |
-| Location       | `apps/cli`, package `@plane/cli`, bin `plane`                         |
+| Location       | `apps/cli`, package `@jtdeelux/plane-cli`, bin `plane`                |
 | Publishing     | Public npm, GitHub Actions workflow on tag                            |
 | Content format | Markdown in the CLI, HTML on the wire, via a conversion layer (below) |
 
@@ -87,7 +87,7 @@ Route `/device`: enter or receive `?user_code=`; if signed out, go through sign-
 
 ```
 apps/cli/
-  package.json        # name @plane/cli, bin {plane: dist/index.js}, files [dist], engines node>=20
+  package.json        # name @jtdeelux/plane-cli, bin {plane: dist/index.js}, files [dist], engines node>=20
   tsconfig.json  tsdown.config.ts
   src/
     index.ts          # commander root, shebang
@@ -128,7 +128,7 @@ No command may finish silently. Every write (create, edit, comment, close, reope
 ## Part 5: publishing
 
 - `package.json`: `publishConfig.access=public`, `files`, `repository`, AGPL-3.0 license (matches the repo), short README (install, login, examples).
-- `.github/workflows/publish-cli.yml`: on tag `cli-v*`, run `pnpm --filter=@plane/cli build && npm publish --provenance`. Needs an `NPM_TOKEN` secret and publish rights to the `@plane` scope.
+- `.github/workflows/publish-cli.yml`: on tag `cli-v*`, run `pnpm --filter=@jtdeelux/plane-cli build && npm publish --provenance`. Needs an `NPM_TOKEN` secret and publish rights to the `@jtdeelux` scope.
 - Every new `.ts`/`.py` file gets the `COPYRIGHT.txt` header. Run `pnpm check` before opening PRs against `preview`.
 
 ## Order of work (one PR each, some can merge)
