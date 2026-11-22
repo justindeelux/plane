@@ -294,6 +294,11 @@ describe("issue create", () => {
     expect(await plane("issue", "create", "--project", "PROJ", "--title", "t")).toBe(3);
     expect(err).toMatch(/^✗ 403/);
     err = "";
+    overrides[w] = { status: 403, body: { detail: "Given API token is not valid" } };
+    expect(await plane("issue", "create", "--project", "PROJ", "--title", "t", "--json")).toBe(3);
+    expect(JSON.parse(out).error.message).toContain("run `plane auth login` (or check PLANE_API_TOKEN)");
+    err = "";
+    out = "";
     overrides[w] = { status: 201 };
     expect(await plane("issue", "create", "--project", "PROJ", "--title", "t")).toBe(1);
     expect(err).toMatch(/empty 201 response/);

@@ -70,7 +70,8 @@ export class ApiError extends CliError {
             ? EXIT.rateLimit
             : EXIT.general;
     const base = `${status} ${statusText}`.trim();
-    const hint = status === 401 ? " (token invalid or expired; run `plane auth login`)" : "";
+    const badToken = status === 401 || (status === 403 && /api token is not valid/i.test(detail));
+    const hint = badToken ? " (token invalid or expired; run `plane auth login` (or check PLANE_API_TOKEN))" : "";
     super(`${base}${detail ? `: ${detail}` : ""}${hint}`, exit, `http_${status}`, status);
   }
 }

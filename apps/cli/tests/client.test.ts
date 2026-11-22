@@ -64,6 +64,20 @@ describe("Client", () => {
     expect(err.status).toBe(status);
   });
 
+  it.each([
+    [401, '{"detail":"x"}', true],
+    [403, '{"detail":"Given API token is not valid"}', true],
+    [403, '{"detail":"You do not have permission to perform this action."}', false],
+  ])("auth hint for %i %s -> %s", async (status, body, hint) => {
+    const f = vi.fn().mockResolvedValue(res(body, { status, statusText: "Err" }));
+    const err = (await make(f)
+      .get("x/")
+      .catch((e: unknown) => e)) as CliError;
+    expect(err.exitCode).toBe(EXIT.auth);
+    if (hint) expect(err.message).toContain("run `plane auth login` (or check PLANE_API_TOKEN)");
+    else expect(err.message).not.toMatch(/plane auth login/);
+  });
+
   it("reports network failure as exit 5", async () => {
     const f = vi.fn().mockRejectedValue(new TypeError("fetch failed"));
     const err = (await make(f)
