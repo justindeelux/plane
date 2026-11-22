@@ -4,6 +4,8 @@
 
 from django.urls import path
 
+from plane.app.views.device import DeviceCodeEndpoint, DeviceTokenEndpoint
+
 from .views import (
     CSRFTokenEndpoint,
     ForgotPasswordEndpoint,
@@ -47,6 +49,9 @@ from .views import (
 )
 
 urlpatterns = [
+    # CLI device login
+    path("device/code/", DeviceCodeEndpoint.as_view(), name="device-code"),
+    path("device/token/", DeviceTokenEndpoint.as_view(), name="device-token"),
     # credentials
     path("sign-in/", SignInAuthEndpoint.as_view(), name="sign-in"),
     path("sign-up/", SignUpAuthEndpoint.as_view(), name="sign-up"),
