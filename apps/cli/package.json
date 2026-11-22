@@ -28,6 +28,7 @@
     "commander": "catalog:"
   },
   "devDependencies": {
+    "@plane/markdown": "workspace:*",
     "@plane/typescript-config": "workspace:*",
     "@types/node": "catalog:",
     "tsdown": "catalog:",
