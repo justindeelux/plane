@@ -9,6 +9,7 @@
 // - Adds a space after checkbox inputs for correct GFM task list rendering
 // - Converts to Markdown using rehype→remark, GFM, and remark-stringify
 
+import type { Handle } from "hast-util-to-mdast";
 import type { Element as HASTElement, ElementContent, Parent as HASTParent } from "hast";
 import rehypeParse from "rehype-parse";
 import rehypeRemark from "rehype-remark";
@@ -37,7 +38,7 @@ function addSpacesToCheckboxes() {
           child.type === "element" &&
           child.tagName === "li" &&
           child.properties &&
-          child.properties["data-type"] === "taskItem"
+          (child.properties["dataType"] === "taskItem" || child.properties["data-type"] === "taskItem")
         ) {
           const liElement = child;
 
@@ -60,16 +61,16 @@ function addSpacesToCheckboxes() {
               // Extract text content from the div, unwrapping any paragraph tags
               const textContent: ElementContent[] = [];
               if (contentDiv.children) {
-                for (const child of contentDiv.children) {
-                  if (child.type === "element" && child.tagName === "p") {
+                for (const contentChild of contentDiv.children) {
+                  if (contentChild.type === "element" && contentChild.tagName === "p") {
                     // Unwrap paragraph - add its children directly
-                    const pElement = child;
+                    const pElement = contentChild;
                     if (pElement.children) {
                       textContent.push(...pElement.children);
                     }
                   } else {
                     // Keep other elements as-is
-                    textContent.push(child);
+                    textContent.push(contentChild);
                   }
                 }
               }
@@ -92,10 +93,36 @@ function addSpacesToCheckboxes() {
   };
 }
 
+// <li><p>text</p><ul>..</ul></li> makes mdast treat the list as loose (blank lines between items); unwrap the <p>
+function tightenListItems() {
+  return (tree: HASTParent) => {
+    const visit = (node: HASTParent): void => {
+      for (const child of node.children as ElementContent[]) {
+        if (child.type !== "element") continue;
+        visit(child);
+        if (child.tagName === "li") {
+          // only a single paragraph is safe to unwrap; several would be glued together
+          const paragraphs = child.children.filter((c) => c.type === "element" && c.tagName === "p");
+          if (paragraphs.length === 1) {
+            child.children = child.children.flatMap((c) =>
+              c.type === "element" && c.tagName === "p" ? c.children : [c]
+            );
+          }
+        }
+      }
+    };
+    visit(tree);
+  };
+}
+
 type TArgs = {
   description_html: string;
   metaData: TCustomComponentsMetaData;
   name?: string;
+  /** extra hast->mdast handlers, applied last (override the defaults) */
+  /** unwrap <p> inside list items so lists stay compact (CLI); the web keeps the loose default */
+  compactLists?: boolean;
+  extraHandlers?: Record<string, Handle>;
 };
 
 /**
@@ -113,7 +140,7 @@ function sanitizeHTML(str: string): string {
 }
 
 export function convertHTMLToMarkdown(args: TArgs): string {
-  const { description_html, metaData, name } = args;
+  const { description_html, metaData, name, extraHandlers, compactLists } = args;
 
   let updatedDescriptionHtml = description_html;
   if (name) {
@@ -123,6 +150,7 @@ export function convertHTMLToMarkdown(args: TArgs): string {
 
   const result = unified()
     .use(rehypeParse, { fragment: true })
+    .use(compactLists ? tightenListItems : () => undefined)
     .use(addSpacesToCheckboxes)
     .use(rehypeRemark, {
       handlers: {
@@ -130,6 +158,7 @@ export function convertHTMLToMarkdown(args: TArgs): string {
           metaData,
         }),
         ...parseMarks,
+        ...extraHandlers,
       },
     })
     .use(remarkGfm)

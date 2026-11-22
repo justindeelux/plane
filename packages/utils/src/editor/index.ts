@@ -5,4 +5,4 @@
  */
 
 export * from "./common";
-export * from "./markdown-parser";
+export * from "@plane/markdown";
