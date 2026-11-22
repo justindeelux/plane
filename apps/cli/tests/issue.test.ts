@@ -178,6 +178,15 @@ describe("issue list", () => {
     expect(await plane("issue", "list", "--project", "PROJ", "--state", "Dne")).toBe(2);
     expect(err).toMatch(/^✗ state "Dne" not found, did you mean "Done"\?/);
   });
+  it("suggests only close matches, else lists what is available", async () => {
+    expect(await plane("issue", "list", "--project", "PROJ", "--state", "Doing")).toBe(2);
+    expect(err).toMatch(/state "Doing" not found \(available: Todo, In Progress, Done\)/);
+    expect(err).not.toMatch(/did you mean/);
+    err = "";
+    expect(await plane("issue", "list", "--project", "PROJ", "--state", "Don")).toBe(2);
+    expect(err).toMatch(/did you mean "Done"\?/);
+    expect(await plane("issue", "list", "--project", "PROJ", "--state", "done")).toBe(0);
+  });
   it("--cycle uses the cycle-issues endpoint", async () => {
     const w = `/api/v1/workspaces/${currentWs()}/projects/${PID}`;
     overrides[`GET ${w}/cycles/`] = { body: { results: [{ id: "cy1", name: "Sprint 1" }] } };
@@ -208,6 +217,10 @@ describe("issue view", () => {
     const j = JSON.parse(out);
     expect(j.description_html).toBe("<p><em>x</em></p>");
     expect(j.body_markdown).toBe("_x_");
+  });
+  it("accepts a lowercase project identifier (prj-7 -> PROJ-7)", async () => {
+    expect(await plane("issue", "view", "proj-7")).toBe(0);
+    expect(calls.some((c) => c.path.endsWith("/work-items/PROJ-7/"))).toBe(true);
   });
   it("404 -> exit 4, bad ref -> exit 2", async () => {
     overrides[`GET /api/v1/workspaces/${currentWs()}/work-items/PROJ-7/`] = { status: 404, body: { error: "nope" } };

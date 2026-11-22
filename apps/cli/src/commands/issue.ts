@@ -90,6 +90,9 @@ const lev = (a: string, b: string) => {
   for (let i = 1; i <= a.length; i++)
     for (let j = 1; j <= b.length; j++)
       d[i]![j] = Math.min(d[i - 1]![j]! + 1, d[i]![j - 1]! + 1, d[i - 1]![j - 1]! + (a[i - 1] === b[j - 1] ? 0 : 1));
+  for (let i = 2; i <= a.length; i++)
+    for (let j = 2; j <= b.length; j++)
+      if (a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) d[i]![j] = Math.min(d[i]![j]!, d[i - 2]![j - 2]! + 1);
   return d[a.length]![b.length]!;
 };
 
@@ -99,9 +102,13 @@ const pick = <T>(kind: string, q: string, items: T[], nameOf: (t: T) => string[]
   const hit = items.find((i) => nameOf(i).some((n) => n.toLowerCase() === lq));
   if (hit) return hit;
   const names = items.map((i) => nameOf(i)[0]!).filter(Boolean);
-  const near =
-    names.find((n) => n.toLowerCase().includes(lq) || lq.includes(n.toLowerCase())) ??
-    names.map((n) => [n, lev(n.toLowerCase(), lq)] as const).toSorted((x, y) => x[1] - y[1])[0]?.[0];
+  // Suggest only a close match: substring, or a small edit distance relative to the name's length.
+  const near = names.find((n) => {
+    const ln = n.toLowerCase();
+    if (ln.includes(lq) || lq.includes(ln)) return true;
+    const d = lev(ln, lq);
+    return d <= 2 && d <= Math.max(1, ln.length / 3);
+  });
   const hint = near ? `, did you mean "${near}"?` : names.length ? ` (available: ${names.slice(0, 8).join(", ")})` : "";
   throw new CliError(`${kind} "${q}" not found${hint}`, EXIT.usage, "not_found_name");
 };
@@ -128,7 +135,7 @@ const urlOf = (c: Ctx, id: string) => `${c.url}/${c.ws}/browse/${id}/`;
 
 /** `PROJ-123` (or a bare number with a project) -> the issue plus its project. */
 const fetchIssue = async (c: Ctx, ref: string): Promise<{ issue: Issue; project: Project }> => {
-  let ident = ref;
+  let ident = ref.replace(/^[A-Za-z][A-Za-z0-9_]*(?=-\d+$)/, (m) => m.toUpperCase());
   if (/^\d+$/.test(ref)) ident = `${(await resolveProject(c)).identifier}-${ref}`;
   if (!REF.test(ident)) throw usageError(`"${ref}" is not a work item id (expected e.g. PROJ-123)`);
   const issue = await c.client.get<Issue>(`workspaces/${c.ws}/work-items/${ident}/`, { expect: ["id", "project"] });
