@@ -1,11 +1,11 @@
-# @plane/cli
+# @jtdeelux/plane-cli
 
 Command line client for a self-hosted [Plane](https://plane.so) server. The binary is `plane`.
 
 ## Install
 
 ```sh
-npm i -g @plane/cli
+npm i -g @jtdeelux/plane-cli
 plane --version
 ```
 

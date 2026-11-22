@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   publish:
-    name: Publish @plane/cli
+    name: Publish @jtdeelux/plane-cli
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -49,10 +49,10 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build
-        run: pnpm turbo run build --filter=@plane/cli...
+        run: pnpm turbo run build --filter=@jtdeelux/plane-cli...
 
       - name: Test
-        run: pnpm --filter=@plane/cli test
+        run: pnpm --filter=@jtdeelux/plane-cli test
 
       - name: Check tag matches package version
         if: github.ref_type == 'tag'
@@ -77,4 +77,4 @@ jobs:
           fi
           flags="--provenance --access public --no-git-checks"
           if [ "$DRY_RUN" = "true" ]; then flags="$flags --dry-run"; fi
-          pnpm publish --filter=@plane/cli $flags
+          pnpm publish --filter=@jtdeelux/plane-cli $flags
