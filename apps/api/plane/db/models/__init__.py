@@ -4,6 +4,7 @@
 
 from .analytic import AnalyticView
 from .api import APIActivityLog, APIToken
+from .device_authorization import DeviceAuthorization
 from .asset import FileAsset
 from .base import BaseModel
 from .cycle import Cycle, CycleIssue, CycleUserProperties
