@@ -9,6 +9,7 @@ import { registerApi } from "./api";
 import { registerAuth } from "./auth";
 import { registerConfig } from "./config";
 import { registerCycle } from "./cycle";
+import { registerIssue } from "./issue";
 import { registerModule } from "./module";
 import { registerProject } from "./project";
 
@@ -20,4 +21,5 @@ export const commands: Array<(program: Command) => void> = [
   registerProject,
   registerCycle,
   registerModule,
+  registerIssue,
 ];

@@ -147,6 +147,12 @@ describe("built bin", () => {
     expect((await plane(["auth", "status"])).code).toBe(3);
   });
 
+  it("issue --help lists the subcommands", async () => {
+    const r = await plane(["issue", "--help"]);
+    expect(r.code).toBe(0);
+    for (const c of ["list", "view", "create", "edit", "comment", "close", "reopen"]) expect(r.out).toContain(c);
+  });
+
   it("unknown command is a usage error (exit 2)", async () => {
     const r = await plane(["bogus"]);
     expect(r.code).toBe(2);
