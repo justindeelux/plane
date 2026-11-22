@@ -6,7 +6,7 @@
 
 import { spawn } from "node:child_process";
 import { createServer, type Server } from "node:http";
-import { chmodSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -14,18 +14,12 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 const bin = join(import.meta.dirname, "..", "dist", "index.mjs");
 const home = mkdtempSync(join(tmpdir(), "plane-cli-smoke-"));
-// Stub browser launchers so a login test never opens a real browser; they log the URL they were given.
-const stubs = mkdtempSync(join(tmpdir(), "plane-cli-stubs-"));
-const opened = join(stubs, "opened.log");
-for (const n of ["open", "xdg-open"]) {
-  writeFileSync(join(stubs, n), `#!/bin/sh\necho "$@" >> ${opened}\n`);
-  chmodSync(join(stubs, n), 0o755);
-}
 // Async spawn: the fake server lives in this process, so the event loop must stay free.
 const plane = (args: string[], input?: string, env: Record<string, string> = {}) =>
   new Promise<{ out: string; err: string; code: number | null }>((resolve) => {
     const c = spawn(process.execPath, [bin, ...args], {
-      env: { PATH: `${stubs}:${process.env.PATH ?? ""}`, XDG_CONFIG_HOME: home, ...env },
+      // PLANE_BROWSER=none: a login test must never launch a real browser (the `open` package ignores PATH stubs).
+      env: { PATH: process.env.PATH ?? "", XDG_CONFIG_HOME: home, PLANE_BROWSER: "none", ...env },
     });
     let out = "";
     let err = "";
@@ -77,7 +71,6 @@ beforeAll(async () => {
 afterAll(() => {
   server.close();
   rmSync(home, { recursive: true, force: true });
-  rmSync(stubs, { recursive: true, force: true });
 });
 
 describe("built bin", () => {
@@ -142,7 +135,7 @@ describe("built bin", () => {
     expect(r.code).toBe(0);
     expect(r.err).toMatch(/! Confirmation code: ABCD-EFGH/);
     expect(r.out).toMatch(/^✓ Logged in as justin \(workspace: acme\) on 127\.0\.0\.1:\d+\n$/);
-    expect(readFileSync(opened, "utf8")).toContain("/device?user_code=ABCD-EFGH");
+    expect(r.err).toContain("/device?user_code=ABCD-EFGH");
     const file = join(home, "plane", "config.json");
     expect(statSync(file).mode & 0o777).toBe(0o600);
     const cfg = JSON.parse(readFileSync(file, "utf8"));
