@@ -25,7 +25,9 @@
     "clean": "rm -rf .turbo && rm -rf node_modules && rm -rf dist"
   },
   "dependencies": {
-    "commander": "catalog:"
+    "@inquirer/prompts": "catalog:",
+    "commander": "catalog:",
+    "open": "catalog:"
   },
   "devDependencies": {
     "@plane/markdown": "workspace:*",

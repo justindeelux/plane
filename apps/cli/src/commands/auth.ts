@@ -4,7 +4,10 @@
  * See the LICENSE file for details.
  */
 
+import { hostname } from "node:os";
 import type { Command } from "commander";
+import open from "open";
+import { checkPlaneServer, deviceLogin } from "../auth/device";
 import { Client } from "../client";
 import { debugLog, getClient, type GlobalOptions } from "../context";
 import { CliError, EXIT, usageError } from "../errors";
@@ -26,24 +29,72 @@ const readStdin = async (): Promise<string> => {
   return s.trim();
 };
 
+const deviceFlow = async (o: { url?: string; workspace?: string }, cmd: Command) => {
+  const cfg = loadConfig();
+  const existing = findProfile(cfg, cmd.optsWithGlobals<GlobalOptions>().host)?.profile;
+  let rawUrl = o.url ?? process.env.PLANE_URL ?? existing?.url;
+  if (!rawUrl) {
+    if (!process.stdin.isTTY || !process.stderr.isTTY) {
+      throw usageError(
+        "no server URL; pass --url <url> (or set PLANE_URL), or use `plane auth login --with-token` to read a token from stdin"
+      );
+    }
+    const { input } = await import("@inquirer/prompts");
+    rawUrl = await input({ message: "Plane server URL:" }, { output: process.stderr });
+  }
+  const url = normalizeUrl(/^[a-z][a-z0-9+.-]*:\/\//i.test(rawUrl.trim()) ? rawUrl : `https://${rawUrl.trim()}`);
+  await checkPlaneServer(url);
+
+  const ac = new AbortController();
+  const onSigint = () => ac.abort();
+  process.once("SIGINT", onSigint);
+  let r;
+  try {
+    r = await deviceLogin(url, hostname(), {
+      signal: ac.signal,
+      open: (u) => open(u),
+      onCode: (c) => {
+        process.stderr.write(
+          `! Confirmation code: ${c.userCode}\n  Opening ${c.verificationUri} in your browser...\n  If it does not open, visit ${c.verificationUriComplete}\n`
+        );
+      },
+    });
+  } finally {
+    process.off("SIGINT", onSigint);
+  }
+
+  const client = new Client({ url, token: r.token, ...(getOutput().debug ? { debug: debugLog } : {}) });
+  const user = await client.get<User>("users/me/", { expect: ["id"] });
+  const workspace = r.workspace ?? o.workspace;
+  const key = hostOf(url);
+  cfg.profiles[key] = {
+    ...(existing && existing.url === url ? existing : {}),
+    url,
+    token: r.token,
+    ...(workspace ? { workspace } : {}),
+  };
+  cfg.current = key;
+  saveConfig(cfg);
+  success(`Logged in as ${who(user)} (workspace: ${workspace ?? "not set"}) on ${key}`, "login", {
+    host: key,
+    url,
+    workspace: workspace ?? null,
+    user,
+  });
+};
+
 export const registerAuth = (program: Command) => {
   const auth = program.command("auth").description("Log in and out of a Plane server");
 
   auth
     .command("login")
     .description("Log in to a Plane server")
-    .option("--with-token", "read an API token from stdin")
+    .option("--with-token", "read an API token from stdin instead of using the browser")
     .option("--url <url>", "Plane web URL, e.g. https://plane.example.com")
     .option("--workspace <slug>", "workspace slug")
     .action(
       run(async (o: { withToken?: boolean; url?: string; workspace?: string }, cmd: Command) => {
-        if (!o.withToken) {
-          throw new CliError(
-            "browser login is not available yet; use `plane auth login --with-token --url <url> --workspace <slug>` and pipe an API token on stdin",
-            EXIT.general,
-            "not_available"
-          );
-        }
+        if (!o.withToken) return deviceFlow(o, cmd);
         const token = await readStdin();
         if (!token) throw usageError("no token received on stdin");
         const cfg = loadConfig();
