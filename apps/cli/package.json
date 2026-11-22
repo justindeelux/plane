@@ -8,14 +8,14 @@
     "plane",
     "project-management"
   ],
-  "homepage": "https://github.com/makeplane/plane/tree/preview/apps/cli#readme",
+  "homepage": "https://github.com/justindeelux/plane/tree/preview/apps/cli#readme",
   "bugs": {
-    "url": "https://github.com/makeplane/plane/issues"
+    "url": "https://github.com/justindeelux/plane/issues"
   },
   "license": "AGPL-3.0",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/makeplane/plane.git",
+    "url": "git+https://github.com/justindeelux/plane.git",
     "directory": "apps/cli"
   },
   "bin": {
