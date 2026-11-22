@@ -56,6 +56,15 @@ describe("built bin", () => {
     expect(r.out).toMatch(/Usage: plane/);
   });
 
+  it.each(["project", "cycle", "module"])("%s --help lists list and view", async (group) => {
+    const r = await plane([group, "--help"]);
+    expect(r.code).toBe(0);
+    expect(r.out).toMatch(/list/);
+    expect(r.out).toMatch(/view/);
+    const v = await plane([group, "view", "--help"]);
+    expect(v.out).toMatch(/--workspace/);
+  });
+
   it("auth status while logged out says so (stderr, exit 3), never empty", async () => {
     const r = await plane(["auth", "status"]);
     expect(r.code).toBe(3);
