@@ -255,9 +255,6 @@ catalogs:
     happy-dom:
       specifier: 21.0.4
       version: 21.0.4
-    hast:
-      specifier: ^1.0.0
-      version: 1.0.0
     hast-util-to-mdast:
       specifier: ^10.1.2
       version: 10.1.2
@@ -309,9 +306,6 @@ catalogs:
     lucide-react:
       specifier: 0.469.0
       version: 0.469.0
-    mdast:
-      specifier: ^3.0.0
-      version: 3.0.0
     mobx:
       specifier: 6.12.0
       version: 6.12.0
@@ -375,9 +369,18 @@ catalogs:
     rehype-remark:
       specifier: ^10.0.1
       version: 10.0.1
+    rehype-stringify:
+      specifier: ^10.0.1
+      version: 10.0.1
     remark-gfm:
       specifier: ^4.0.1
       version: 4.0.1
+    remark-parse:
+      specifier: ^11.0.0
+      version: 11.0.0
+    remark-rehype:
+      specifier: ^11.1.2
+      version: 11.1.2
     remark-stringify:
       specifier: ^11.0.0
       version: 11.0.0
@@ -1556,6 +1559,64 @@ importers:
         specifier: 5.8.3
         version: 5.8.3
 
+  packages/markdown:
+    dependencies:
+      hast-util-to-mdast:
+        specifier: 'catalog:'
+        version: 10.1.2
+      rehype-parse:
+        specifier: 'catalog:'
+        version: 9.0.1
+      rehype-remark:
+        specifier: 'catalog:'
+        version: 10.0.1
+      rehype-stringify:
+        specifier: 'catalog:'
+        version: 10.0.1
+      remark-gfm:
+        specifier: 'catalog:'
+        version: 4.0.1
+      remark-parse:
+        specifier: 'catalog:'
+        version: 11.0.0
+      remark-rehype:
+        specifier: 'catalog:'
+        version: 11.1.2
+      remark-stringify:
+        specifier: 'catalog:'
+        version: 11.0.0
+      sanitize-html:
+        specifier: 'catalog:'
+        version: 2.18.1
+      unified:
+        specifier: 'catalog:'
+        version: 11.0.5
+    devDependencies:
+      '@plane/typescript-config':
+        specifier: workspace:*
+        version: link:../typescript-config
+      '@types/hast':
+        specifier: 'catalog:'
+        version: 3.0.4
+      '@types/mdast':
+        specifier: 'catalog:'
+        version: 4.0.4
+      '@types/node':
+        specifier: 'catalog:'
+        version: 22.12.0
+      '@types/sanitize-html':
+        specifier: 'catalog:'
+        version: 2.16.0
+      tsdown:
+        specifier: 'catalog:'
+        version: 0.16.0(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.3)(oxc-resolver@11.24.2)(typescript@5.8.3)
+      typescript:
+        specifier: 5.8.3
+        version: 5.8.3
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.12(@opentelemetry/api@1.9.1)(@types/node@22.12.0)(@vitest/coverage-v8@4.1.12)(happy-dom@21.0.4)(jsdom@23.2.0)(vite@8.2.4(@types/node@22.12.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.43.1)(tsx@4.20.6)(yaml@2.8.3))
+
   packages/services:
     dependencies:
       '@plane/constants':
@@ -1681,6 +1742,9 @@ importers:
       '@plane/constants':
         specifier: workspace:*
         version: link:../constants
+      '@plane/markdown':
+        specifier: workspace:*
+        version: link:../markdown
       '@plane/types':
         specifier: workspace:*
         version: link:../types
@@ -1693,42 +1757,18 @@ importers:
       date-fns:
         specifier: 'catalog:'
         version: 4.1.0
-      hast:
-        specifier: 'catalog:'
-        version: 1.0.0
-      hast-util-to-mdast:
-        specifier: 'catalog:'
-        version: 10.1.2
       lodash-es:
         specifier: 4.18.1
         version: 4.18.1
-      mdast:
-        specifier: 'catalog:'
-        version: 3.0.0
       react:
         specifier: 19.2.8
         version: 19.2.8
-      rehype-parse:
-        specifier: 'catalog:'
-        version: 9.0.1
-      rehype-remark:
-        specifier: 'catalog:'
-        version: 10.0.1
-      remark-gfm:
-        specifier: 'catalog:'
-        version: 4.0.1
-      remark-stringify:
-        specifier: 'catalog:'
-        version: 11.0.0
       sanitize-html:
         specifier: 'catalog:'
         version: 2.18.1
       tailwind-merge:
         specifier: 'catalog:'
         version: 3.4.0
-      unified:
-        specifier: 'catalog:'
-        version: 11.0.5
       uuid:
         specifier: 14.0.0
         version: 14.0.0
@@ -1739,15 +1779,9 @@ importers:
       '@types/chroma-js':
         specifier: 'catalog:'
         version: 3.1.2
-      '@types/hast':
-        specifier: 'catalog:'
-        version: 3.0.4
       '@types/lodash-es':
         specifier: 'catalog:'
         version: 4.17.12
-      '@types/mdast':
-        specifier: 'catalog:'
-        version: 4.0.4
       '@types/node':
         specifier: 'catalog:'
         version: 22.12.0
@@ -5621,10 +5655,6 @@ packages:
   hast-util-whitespace@3.0.0:
     resolution: {integrity: sha512-88JUN06ipLwsnv+dVn+OIYOvAuvBMy/Qoi6O7mQHxdPXpjy+Cd6xRkWwux7DKO+4sYILtLBRIKgsdpS2gQc7qw==}
 
-  hast@1.0.0:
-    resolution: {integrity: sha512-vFUqlRV5C+xqP76Wwq2SrM0kipnmpxJm7OfvVXpB35Fp+Fn4MV+ozr+JZr5qFvyR1q/U+Foim2x+3P+x9S1PLA==}
-    deprecated: Renamed to rehype
-
   hastscript@9.0.1:
     resolution: {integrity: sha512-g7df9rMFX/SPi34tyGCyUBREQoKkapwdY/T04Qn9TDWfHhAYt4/I0gMVirzK5wEzeUqIjEB+LXC/ypb7Aqno5w==}
 
@@ -6276,10 +6306,6 @@ packages:
 
   mdast-util-to-string@4.0.0:
     resolution: {integrity: sha512-0H44vDimn51F0YwvxSJSm0eCDOJTRlmN0R1yBh4HLj9wiV1Dn0QoXGbvFAWj2hSItVTlCmBF1hqKlIyUBVFLPg==}
-
-  mdast@3.0.0:
-    resolution: {integrity: sha512-xySmf8g4fPKMeC07jXGz971EkLbWAJ83s4US2Tj9lEdnZ142UP5grN73H1Xd3HzrdbU5o9GYYP/y8F9ZSwLE9g==}
-    deprecated: '`mdast` was renamed to `remark`'
 
   mdn-data@2.0.14:
     resolution: {integrity: sha512-dn6wd0uw5GsdswPFfsgMp5NSB0/aDe6fK94YJV/AJDYXL6HVLWBsxeq7js7Ad+mU2K9LAlwpk6kN2D5mwCPVow==}
@@ -7069,6 +7095,9 @@ packages:
 
   rehype-remark@10.0.1:
     resolution: {integrity: sha512-EmDndlb5NVwXGfUa4c9GPK+lXeItTilLhE6ADSaQuHr4JUlKw9MidzGzx4HpqZrNCt6vnHmEifXQiiA+CEnjYQ==}
+
+  rehype-stringify@10.0.1:
+    resolution: {integrity: sha512-k9ecfXHmIPuFVI61B9DeLPN0qFHfawM6RsuX48hoqlaKSF61RskNjSm1lI8PhBEM0MRdLxVVm4WmTqJQccH9mA==}
 
   remark-gfm@4.0.1:
     resolution: {integrity: sha512-1quofZ2RQ9EWdeN34S79+KExV1764+wCUGop5CPL1WGdD0ocPpu91lzPGbwWMECpEpd42kJGQwzRfyov9j4yNg==}
@@ -11522,8 +11551,6 @@ snapshots:
     dependencies:
       '@types/hast': 3.0.4
 
-  hast@1.0.0: {}
-
   hastscript@9.0.1:
     dependencies:
       '@types/hast': 3.0.4
@@ -12258,8 +12285,6 @@ snapshots:
   mdast-util-to-string@4.0.0:
     dependencies:
       '@types/mdast': 4.0.4
-
-  mdast@3.0.0: {}
 
   mdn-data@2.0.14: {}
 
@@ -13264,6 +13289,12 @@ snapshots:
       hast-util-to-mdast: 10.1.2
       unified: 11.0.5
       vfile: 6.0.3
+
+  rehype-stringify@10.0.1:
+    dependencies:
+      '@types/hast': 3.0.4
+      hast-util-to-html: 9.0.5
+      unified: 11.0.5
 
   remark-gfm@4.0.1:
     dependencies:

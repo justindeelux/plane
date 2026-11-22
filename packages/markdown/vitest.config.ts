@@ -4,5 +4,8 @@
  * See the LICENSE file for details.
  */
 
-export * from "./types";
-export * from "./root";
+import { defineConfig } from "vitest/config";
+
+export default defineConfig({
+  test: { include: ["src/**/*.test.ts"] },
+});
