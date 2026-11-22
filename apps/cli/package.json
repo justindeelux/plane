@@ -2,12 +2,28 @@
   "name": "@plane/cli",
   "version": "0.1.0",
   "description": "Command line interface for self-hosted Plane",
+  "keywords": [
+    "cli",
+    "issue-tracker",
+    "plane",
+    "project-management"
+  ],
+  "homepage": "https://github.com/makeplane/plane/tree/preview/apps/cli#readme",
+  "bugs": {
+    "url": "https://github.com/makeplane/plane/issues"
+  },
   "license": "AGPL-3.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/makeplane/plane.git",
+    "directory": "apps/cli"
+  },
   "bin": {
     "plane": "dist/index.mjs"
   },
   "files": [
-    "dist"
+    "dist",
+    "README.md"
   ],
   "type": "module",
   "publishConfig": {
