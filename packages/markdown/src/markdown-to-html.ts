@@ -27,7 +27,9 @@ const toTipTapTaskLists = () => (tree: Root) => {
     for (const child of node.children) {
       if (child.type !== "element") continue;
       visit(child);
-      if (child.tagName === "ul" && hasClass(child, "contains-task-list")) {
+      if ((child.tagName === "ul" || child.tagName === "ol") && hasClass(child, "contains-task-list")) {
+        // taskItem only exists inside a taskList, so ordered task lists become bullet task lists
+        child.tagName = "ul";
         child.properties = { dataType: "taskList" };
       } else if (child.tagName === "li" && hasClass(child, "task-list-item")) {
         // loose items nest the checkbox inside the first <p>

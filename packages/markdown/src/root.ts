@@ -101,9 +101,13 @@ function tightenListItems() {
         if (child.type !== "element") continue;
         visit(child);
         if (child.tagName === "li") {
-          child.children = child.children.flatMap((c) =>
-            c.type === "element" && c.tagName === "p" ? c.children : [c]
-          );
+          // only a single paragraph is safe to unwrap; several would be glued together
+          const paragraphs = child.children.filter((c) => c.type === "element" && c.tagName === "p");
+          if (paragraphs.length === 1) {
+            child.children = child.children.flatMap((c) =>
+              c.type === "element" && c.tagName === "p" ? c.children : [c]
+            );
+          }
         }
       }
     };

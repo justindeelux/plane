@@ -66,6 +66,26 @@ describe("htmlToMarkdown (TipTap fixtures)", () => {
     ));
 });
 
+describe("fix round 1", () => {
+  it("keeps multi-paragraph list items as separate blocks", () => {
+    const md = htmlToMarkdown("<ul><li><p>a</p><p>para</p></li></ul>");
+    expect(md).not.toContain("a para");
+    expect(md).toMatch(/a\n\n\s+para/);
+  });
+  it("converts ordered task lists to a taskList ul", () => {
+    const html = markdownToHtml("1. [x] a\n2. [ ] b");
+    expect(html).toContain('<ul data-type="taskList">');
+    expect(html).not.toContain("<ol");
+    expect(html.match(/data-type="taskItem"/g)).toHaveLength(2);
+  });
+  it("falls back to alt text when an image src is stripped", () => {
+    const md = htmlToMarkdown(markdownToHtml("![a](data:image/png;base64,AAAA)"));
+    expect(md).toBe("a");
+    expect(md).not.toContain("undefined");
+    expect(htmlToMarkdown("<p><img></p>")).toBe("[image]");
+  });
+});
+
 describe("lossy HTML", () => {
   it("keeps text for underline/color", () => {
     expect(htmlToMarkdown('<p><u>under</u> <span style="color: red">red</span></p>')).toBe("under red");

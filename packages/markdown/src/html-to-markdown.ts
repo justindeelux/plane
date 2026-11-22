@@ -26,6 +26,12 @@ const placeholderHandlers = (metaData: TCustomComponentsMetaData): Record<string
       const asset = metaData.file_assets.find((a) => a.id === src);
       return createTextNode(asset ? `![${asset.name}](${asset.url})` : `[image: ${src}]`);
     },
+    // images whose src was stripped (e.g. data: URIs) must not read back as "undefined"
+    img: (_state, node) => {
+      const src = node.properties?.src;
+      const alt = String(node.properties?.alt ?? "");
+      return createTextNode(src ? `![${alt || "Image"}](${String(src)})` : alt || "[image]");
+    },
     "issue-embed-component": (_state, node) =>
       createTextNode(`[work item ${String(node.properties?.entity_identifier ?? "")}]`),
   };
