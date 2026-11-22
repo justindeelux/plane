@@ -62,13 +62,14 @@ plane auth login | status | logout | token
 plane config get <key> | set <key> <value> | list
 plane api <path>
 plane project list | view [project]
+plane issue list | view <id> | create | edit <id> | comment <id> | close <id> | reopen <id>
 plane cycle list | view <cycle>
 plane module list | view <module>
 ```
 
 Global options: `--json`, `-q/--quiet`, `--debug`, `--host <host>`, `-V/--version`, `-h/--help`.
 
-`project`, `cycle` and `module` commands take `--workspace <slug>`. `cycle` and `module` also take `--project <project>` (identifier, name or UUID). Both default to the values in your config (`plane config set project <identifier>`).
+`project`, `cycle`, `module` and `issue` commands take `--workspace <slug>`. `cycle`, `module` and `issue` also take `--project` (`issue` accepts an identifier or UUID; `cycle` and `module` also accept a name). Both default to the values in your config (`plane config set project <identifier>`).
 
 ```sh
 plane project list
@@ -87,9 +88,47 @@ plane api -X PATCH -f name=Renamed workspaces/acme/projects/<project-id>/
 
 ### Issues
 
-The `issue` commands are not in this release yet. They are in a separate pull request and this section describes the plan, not the current binary. When they land, issue and comment bodies are Markdown (`--body`, `--body-file`, or stdin) and the CLI converts them to and from the HTML that Plane stores, so you never see HTML.
+Work items are addressed by id, such as `WEB-123`. A bare number works when a default project is set.
 
-Markdown cannot express everything the Plane editor can. Underline, colors, mentions, callouts and embeds are shown as plain text or inline HTML when you read an issue. Before an edit would flatten such content, the CLI warns and asks you to pass `--force`.
+```sh
+plane issue list --project WEB --state "In Progress" --assignee me --limit 20
+plane issue list --project WEB --cycle "Sprint 12" --label bug
+plane issue view WEB-123
+plane issue view WEB-123 --web
+plane issue create --project WEB -t "Fix login redirect" --priority high --assignee me --label bug --body "Steps to reproduce..."
+plane issue edit WEB-123 --state Done --remove-label bug --remove-assignee alice
+plane issue comment WEB-123 --body-file notes.md
+plane issue close WEB-123
+plane issue reopen WEB-123
+```
+
+Flags, as in the source:
+
+- `list`: `--state`, `--assignee` (repeatable), `--label` (repeatable, all must match), `--cycle`, `--module`, `--limit` (default 30), plus `--workspace` and `--project`.
+- `view`: `--web` opens the item in your browser.
+- `create`: `-t, --title` (required), `--state`, `--priority` (`urgent|high|medium|low|none`), `--assignee` and `--label` (repeatable), `--body`, `--body-file`.
+- `edit`: `-t, --title`, `--state`, `--priority`, `--assignee`, `--label`, `--remove-assignee`, `--remove-label` (all repeatable except title, state and priority), `--body`, `--body-file`, `--force`.
+- `comment`: `--body`, `--body-file`.
+- `close` and `reopen`: move the item to the first completed or unstarted state. `--state <name>` picks a specific state. If the item is already there, the command says so and exits 0.
+
+Names for states, labels and assignees are matched case-insensitively. A near miss prints a "did you mean" hint. `me` as an assignee means the logged-in user.
+
+`list` filters run in the CLI, because the v1 API has no server-side filters. The CLI pages through the project's items (100 per request) until it has `--limit` matches, so a filter that matches little in a large project can use many requests and hit the 60 per minute API-key limit. The CLI retries on 429; raise `API_KEY_RATE_LIMIT` on your server if it keeps happening.
+
+#### Bodies and Markdown
+
+Issue descriptions and comments are Markdown. The CLI converts them to the HTML that Plane stores when it sends, and back to Markdown when `issue view` prints, so you never handle HTML. `issue view --json` has the converted text in `body_markdown`.
+
+Give a body with one of:
+
+- `--body "text"`
+- `--body-file path`
+- `--body -` or `--body-file -` to read stdin
+- `$VISUAL` or `$EDITOR` (falling back to `vi`), opened when `issue create` or `issue comment` gets no body and the terminal is interactive. `issue edit` never opens an editor; without a body flag it leaves the description alone.
+
+`--body` and `--body-file` cannot be combined, and an empty body is rejected.
+
+Markdown cannot express everything the Plane editor can. Underline, colors, mentions, callouts and embeds are flattened. `issue edit` therefore refuses to replace a description that has such formatting and tells you to re-run with `--force` if you want to overwrite it. Edits that don't pass a body never touch the description.
 
 ## Output and exit codes
 
