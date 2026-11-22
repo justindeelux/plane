@@ -44,6 +44,8 @@ export const AuthenticationWrapper = observer(function AuthenticationWrapper(pro
   const router = useAppRouter();
   const searchParams = useSearchParams();
   const nextPath = searchParams.get("next_path");
+  // keep the query string (e.g. /device?user_code=...) across the sign-in round trip
+  const search = searchParams.toString() ? `?${searchParams.toString()}` : "";
   // props
   const { children, pageType = EPageTypes.AUTHENTICATED } = props;
   // hooks
@@ -113,7 +115,7 @@ export const AuthenticationWrapper = observer(function AuthenticationWrapper(pro
 
   if (pageType === EPageTypes.ONBOARDING) {
     if (!currentUser?.id) {
-      router.push(`/${pathname ? `?next_path=${pathname}` : ``}`);
+      router.push(`/${pathname ? `?next_path=${encodeURIComponent(pathname + search)}` : ``}`);
       return <></>;
     } else {
       if (currentUser && currentUserProfile?.id && isUserOnboard) {
@@ -126,7 +128,7 @@ export const AuthenticationWrapper = observer(function AuthenticationWrapper(pro
 
   if (pageType === EPageTypes.SET_PASSWORD) {
     if (!currentUser?.id) {
-      router.push(`/${pathname ? `?next_path=${pathname}` : ``}`);
+      router.push(`/${pathname ? `?next_path=${encodeURIComponent(pathname + search)}` : ``}`);
       return <></>;
     } else {
       if (currentUser && !currentUser?.is_password_autoset && currentUserProfile?.id && isUserOnboard) {
@@ -145,7 +147,7 @@ export const AuthenticationWrapper = observer(function AuthenticationWrapper(pro
         return <></>;
       }
     } else {
-      router.push(`/${pathname ? `?next_path=${pathname}` : ``}`);
+      router.push(`/${pathname ? `?next_path=${encodeURIComponent(pathname + search)}` : ``}`);
       return <></>;
     }
   }
