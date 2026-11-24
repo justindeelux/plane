@@ -61,6 +61,7 @@ plane --host plane.example.com project list
 plane auth login | status | logout | token
 plane config get <key> | set <key> <value> | list
 plane api <path>
+plane convert markdown-to-html | html-to-markdown [--file <path>]
 plane project list | view [project] | create | edit [project] | archive [project] | unarchive [project] | delete [project]
 plane issue list | view <id> | create | edit <id> | comment <id> | close <id> | reopen <id> | delete <id>
 plane issue dependency list <id> | add <id> | remove <id>
@@ -76,7 +77,7 @@ plane label list | view <label> | create | edit <label> | delete <label>
 plane member list
 ```
 
-Global options: `--json`, `-q/--quiet`, `--debug`, `--host <host>`, `-V/--version`, `-h/--help`.
+Global options: `--json`, `-q/--quiet`, `--debug`, `--raw-html`, `--host <host>`, `-V/--version`, `-h/--help`.
 
 `project`, `cycle`, `module`, `issue`, `comment`, `state`, `label` and `member` commands take `--workspace <slug>`. All except `project` also take `--project` (`issue` accepts an identifier or UUID; `cycle` and `module` also accept a name). Both default to the values in your config (`plane config set project <identifier>`).
 
@@ -173,7 +174,7 @@ plane issue dependency add WEB-123 --target WEB-124 --type blocked_by
 plane issue activity list WEB-123
 ```
 
-- Comment bodies are Markdown and use the same `--body` / `--body-file` rules as issue bodies. Listing and viewing print Markdown; `--json` carries `body_markdown`.
+- Comment bodies are Markdown and use the same `--body` / `--body-file` rules as issue bodies. Listing and viewing print Markdown; `--json` carries `body_markdown`, and `--raw-html` adds the stored `comment_html`.
 - Link add/edit require an HTTP(S) URL; `--title` is optional. Deletes require `--yes`.
 - Dependencies use one of `blocking`, `blocked_by`, `relates_to`, `duplicate`, `start_before`, `start_after`, `finish_before`, `finish_after` (default `blocked_by`). `--target-project` resolves a bare target number from another project. The v1 API has no route to remove a dependency, so `remove` explains that and exits non-zero.
 - Activity lists work item changes with the actor, field and old/new value.
@@ -182,7 +183,7 @@ plane issue activity list WEB-123
 
 #### Bodies and Markdown
 
-Issue descriptions and comments are Markdown. The CLI converts them to the HTML that Plane stores when it sends, and back to Markdown when `issue view` prints, so you never handle HTML. `issue view --json` has the converted text in `body_markdown`.
+Issue descriptions and comments are Markdown. The CLI converts them to the HTML that Plane stores when it sends, and back to Markdown when `issue view` prints, so you never handle HTML. `issue view --json` has the converted text in `body_markdown`; add the global `--raw-html` option to keep the original `description_html` next to it. The same flag applies to `comment view` and its `comment_html`, and appends a `Raw HTML:` block to the human output.
 
 Give a body with one of:
 
@@ -193,7 +194,19 @@ Give a body with one of:
 
 `--body` and `--body-file` cannot be combined, and an empty body is rejected.
 
-Markdown cannot express everything the Plane editor can. Underline, colors, mentions, callouts and embeds are flattened. `issue edit` therefore refuses to replace a description that has such formatting and tells you to re-run with `--force` if you want to overwrite it. Edits that don't pass a body never touch the description.
+Markdown cannot express everything the Plane editor can. Underline, colors, mentions, callouts and embeds are flattened. `issue edit` therefore refuses to replace a description that has such formatting and tells you to re-run with `--force` if you want to overwrite it. Edits that don't pass a body never touch the description. Reading with `--raw-html` is the way to inspect what would be flattened.
+
+### Local conversion
+
+`plane convert` runs the same converter without a login or a server:
+
+```sh
+plane convert markdown-to-html --file issue.md
+plane convert html-to-markdown --file exported.html
+cat issue.md | plane convert markdown-to-html
+```
+
+`--file` defaults to `-` (stdin). Without `--json` the result is plain HTML or Markdown; with it you get `{"html": "..."}` or `{"markdown": "..."}`. Conversion is semantic, not lossless: mentions, colors, embeds and other editor-only constructs may change.
 
 ### Cycles
 

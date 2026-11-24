@@ -72,8 +72,13 @@ const view = async (ref: string, commentId: string, o: Opts, cmd: Command) => {
   ]);
   const ident = identifierOf(project, issue);
   const text = markdown(comment);
+  const { comment_html, ...rest } = comment;
   if (getOutput().json) {
-    print("", { ...comment, body_markdown: text });
+    print("", {
+      ...rest,
+      ...(getOutput().rawHtml ? { comment_html } : {}),
+      body_markdown: text,
+    });
     return;
   }
   print(
@@ -88,7 +93,7 @@ const view = async (ref: string, commentId: string, o: Opts, cmd: Command) => {
       text || "(empty comment)",
     ]
       .filter((line) => line !== "")
-      .join("\n")
+      .join("\n") + (getOutput().rawHtml && comment_html ? `\n\nRaw HTML:\n${comment_html}` : "")
   );
 };
 

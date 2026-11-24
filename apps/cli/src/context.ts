@@ -13,6 +13,7 @@ export interface GlobalOptions {
   json?: boolean;
   quiet?: boolean;
   debug?: boolean;
+  rawHtml?: boolean;
   host?: string;
 }
 

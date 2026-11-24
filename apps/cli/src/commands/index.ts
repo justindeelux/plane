@@ -10,6 +10,7 @@ import { registerApi } from "./api";
 import { registerAuth } from "./auth";
 import { registerComment } from "./comment";
 import { registerConfig } from "./config";
+import { registerConvert } from "./convert";
 import { registerCycle } from "./cycle";
 import { registerDependency } from "./dependency";
 import { registerIssue } from "./issue";
@@ -24,6 +25,7 @@ import { registerState } from "./state";
 export const commands: Array<(program: Command) => void> = [
   registerAuth,
   registerConfig,
+  registerConvert,
   registerApi,
   registerProject,
   registerCycle,
