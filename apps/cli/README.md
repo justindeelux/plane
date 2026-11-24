@@ -63,7 +63,9 @@ plane config get <key> | set <key> <value> | list
 plane api <path>
 plane project list | view [project]
 plane issue list | view <id> | create | edit <id> | comment <id> | close <id> | reopen <id>
-plane cycle list | view <cycle>
+plane cycle list | view <cycle> | create | edit <cycle> | delete <cycle> --yes | complete <cycle>
+plane cycle archive <cycle> | unarchive <cycle> | transfer <cycle> --to <cycle> | issues <cycle>
+plane cycle add-issue <cycle> --issue <id> | remove-issue <cycle> --issue <id>
 plane module list | view <module>
 ```
 
@@ -129,6 +131,35 @@ Give a body with one of:
 `--body` and `--body-file` cannot be combined, and an empty body is rejected.
 
 Markdown cannot express everything the Plane editor can. Underline, colors, mentions, callouts and embeds are flattened. `issue edit` therefore refuses to replace a description that has such formatting and tells you to re-run with `--force` if you want to overwrite it. Edits that don't pass a body never touch the description.
+
+### Cycles
+
+```sh
+plane cycle list --project WEB --status current
+plane cycle list --project WEB --archived
+plane cycle create --project WEB --name "Sprint 12" --start-date 2026-01-05 --end-date 2026-01-19 --description "Theme: auth"
+plane cycle edit "Sprint 12" --project WEB --end-date 2026-01-23
+plane cycle complete "Sprint 12" --project WEB
+plane cycle archive "Sprint 12" --project WEB
+plane cycle unarchive "Sprint 12" --project WEB
+plane cycle transfer "Sprint 12" --project WEB --to "Sprint 13"
+plane cycle issues "Sprint 12" --project WEB
+plane cycle add-issue "Sprint 12" --project WEB --issue WEB-123
+plane cycle remove-issue "Sprint 12" --project WEB --issue WEB-123
+plane cycle delete "Sprint 12" --project WEB --yes
+```
+
+Unless noted, cycles are matched by name or UUID, case-insensitively.
+
+- `create` needs `--name`. `--start-date` and `--end-date` are `YYYY-MM-DD`, and the start cannot be later than the end. `--owned-by` takes a user UUID.
+- `edit` takes the same fields. It sends only the flags you pass, keeps the current owner, and reports the fields the server did not apply.
+- `complete` ends the cycle now and refuses to run when the start date is still in the future.
+- `--archived` on `list` shows archived cycles instead; the `--status` filter does not apply there.
+- `delete` requires `--yes`.
+- `transfer` moves every issue to the destination cycle; the two cycles must differ.
+- `add-issue` and `remove-issue` take the work item id (e.g. `WEB-123`) and check that it belongs to the same project.
+- `--description "text"` or `--description-file <path>` (`-` reads stdin) sets the description. Cycle descriptions are plain text, not the rich HTML used by work items.
+- Writes read the cycle back before reporting success; `--json` returns the cycle from that read-back.
 
 ## Output and exit codes
 
