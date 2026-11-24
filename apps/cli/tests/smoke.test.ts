@@ -109,7 +109,7 @@ describe("built bin", () => {
       expect(r.err, name).toBe("");
       expect(r.out.startsWith(`Usage: plane ${runs[i].leaf.join(" ")} `), name).toBe(true);
     });
-  });
+  }, 60_000); // spawns one process per leaf command and flag; slow CI runners need the headroom
 
   it("auth status while logged out says so (stderr, exit 3), never empty", async () => {
     const r = await plane(["auth", "status"]);
