@@ -11,13 +11,18 @@
 #   LIVE_SERVER_SECRET_KEY  openssl rand -hex 32
 #   POSTGRES_PASSWORD, RABBITMQ_PASSWORD, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
 #
-# Gotham rules this file follows: prebuilt images only, no env_file, no
+# Fork edit: api, worker, beat-worker, migrator and web are built from this
+# repo (the CLI device login lives there); run `docker compose up -d --build`.
+# Gotham rules this file followed before that: prebuilt images only, no env_file, no
 # container_name, no top-level x-* keys, no host ports below 1024.
 # `docker-compose.yml` stays the upstream build-from-source file.
 
 services:
   web:
-    image: makeplane/plane-frontend:${APP_RELEASE:-stable}
+    image: plane-frontend:local
+    build:
+      context: .
+      dockerfile: ./apps/web/Dockerfile.web
     restart: unless-stopped
     depends_on:
       - api
@@ -53,7 +58,10 @@ services:
       - web
 
   api:
-    image: makeplane/plane-backend:${APP_RELEASE:-stable}
+    image: plane-backend:local
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile.api
     restart: unless-stopped
     command: ./bin/docker-entrypoint-api.sh
     volumes:
@@ -98,7 +106,10 @@ services:
       - plane-mq
 
   worker:
-    image: makeplane/plane-backend:${APP_RELEASE:-stable}
+    image: plane-backend:local
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile.api
     restart: unless-stopped
     command: ./bin/docker-entrypoint-worker.sh
     volumes:
@@ -111,7 +122,10 @@ services:
       - plane-mq
 
   beat-worker:
-    image: makeplane/plane-backend:${APP_RELEASE:-stable}
+    image: plane-backend:local
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile.api
     restart: unless-stopped
     command: ./bin/docker-entrypoint-beat.sh
     volumes:
@@ -124,7 +138,10 @@ services:
       - plane-mq
 
   migrator:
-    image: makeplane/plane-backend:${APP_RELEASE:-stable}
+    image: plane-backend:local
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile.api
     restart: on-failure
     command: ./bin/docker-entrypoint-migrator.sh
     volumes:
