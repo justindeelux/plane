@@ -62,8 +62,14 @@ plane auth login | status | logout | token
 plane config get <key> | set <key> <value> | list
 plane api <path>
 plane project list | view [project] | create | edit [project] | archive [project] | unarchive [project] | delete [project]
-plane issue list | view <id> | create | edit <id> | comment <id> | close <id> | reopen <id>
-plane cycle list | view <cycle>
+plane issue list | view <id> | create | edit <id> | comment <id> | close <id> | reopen <id> | delete <id>
+plane issue dependency list <id> | add <id> | remove <id>
+plane issue link list <id> | view <id> <link> | add <id> | edit <id> <link> | delete <id> <link>
+plane issue activity list <id>
+plane comment list <issue> | view <issue> <comment> | edit <issue> <comment> | delete <issue> <comment>
+plane cycle list | view <cycle> | create | edit <cycle> | delete <cycle> --yes | complete <cycle>
+plane cycle archive <cycle> | unarchive <cycle> | transfer <cycle> --to <cycle> | issues <cycle>
+plane cycle add-issue <cycle> --issue <id> | remove-issue <cycle> --issue <id>
 plane module list | view <module>
 plane state list | view <state> | create | edit <state> | delete <state>
 plane label list | view <label> | create | edit <label> | delete <label>
@@ -72,7 +78,7 @@ plane member list
 
 Global options: `--json`, `-q/--quiet`, `--debug`, `--host <host>`, `-V/--version`, `-h/--help`.
 
-`project`, `cycle`, `module`, `issue`, `state`, `label` and `member` commands take `--workspace <slug>`. All except `project` also take `--project` (`issue` accepts an identifier or UUID; `cycle` and `module` also accept a name). Both default to the values in your config (`plane config set project <identifier>`).
+`project`, `cycle`, `module`, `issue`, `comment`, `state`, `label` and `member` commands take `--workspace <slug>`. All except `project` also take `--project` (`issue` accepts an identifier or UUID; `cycle` and `module` also accept a name). Both default to the values in your config (`plane config set project <identifier>`).
 
 ```sh
 plane project list
@@ -133,6 +139,7 @@ plane issue edit WEB-123 --state Done --remove-label bug --remove-assignee alice
 plane issue comment WEB-123 --body-file notes.md
 plane issue close WEB-123
 plane issue reopen WEB-123
+plane issue delete WEB-123 --yes
 ```
 
 Flags:
@@ -143,8 +150,33 @@ Flags:
 - `edit`: `-t, --title`, `--state`, `--priority`, `--assignee`, `--label`, `--remove-assignee`, `--remove-label` (all repeatable except title, state and priority), `--body`, `--body-file`, `--force`.
 - `comment`: `--body`, `--body-file`.
 - `close` and `reopen`: move the item to the first completed or unstarted state. `--state <name>` picks a specific state. If the item is already there, the command says so and exits 0.
+- `delete`: `--yes` is required.
 
 Names for states, labels and assignees are matched case-insensitively. A near miss prints a "did you mean" hint. `me` as an assignee means the logged-in user.
+
+#### Comments, links, dependencies and activity
+
+```sh
+plane comment list WEB-123
+plane comment view WEB-123 <comment-id>
+plane comment edit WEB-123 <comment-id> --body "Updated text"
+plane comment delete WEB-123 <comment-id> --yes
+
+plane issue link list WEB-123
+plane issue link add WEB-123 --url https://example.com/design --title Design
+plane issue link edit WEB-123 <link-id> --title "Design doc"
+plane issue link view WEB-123 <link-id>
+plane issue link delete WEB-123 <link-id> --yes
+
+plane issue dependency list WEB-123
+plane issue dependency add WEB-123 --target WEB-124 --type blocked_by
+plane issue activity list WEB-123
+```
+
+- Comment bodies are Markdown and use the same `--body` / `--body-file` rules as issue bodies. Listing and viewing print Markdown; `--json` carries `body_markdown`.
+- Link add/edit require an HTTP(S) URL; `--title` is optional. Deletes require `--yes`.
+- Dependencies use one of `blocking`, `blocked_by`, `relates_to`, `duplicate`, `start_before`, `start_after`, `finish_before`, `finish_after` (default `blocked_by`). `--target-project` resolves a bare target number from another project. The v1 API has no route to remove a dependency, so `remove` explains that and exits non-zero.
+- Activity lists work item changes with the actor, field and old/new value.
 
 `list` filters run in the CLI, because the v1 API has no server-side filters. The CLI pages through the project's items (100 per request) until it has `--limit` matches, so a filter that matches little in a large project can use many requests and hit the 60 per minute API-key limit. The CLI retries on 429; raise `API_KEY_RATE_LIMIT` on your server if it keeps happening.
 
@@ -162,6 +194,35 @@ Give a body with one of:
 `--body` and `--body-file` cannot be combined, and an empty body is rejected.
 
 Markdown cannot express everything the Plane editor can. Underline, colors, mentions, callouts and embeds are flattened. `issue edit` therefore refuses to replace a description that has such formatting and tells you to re-run with `--force` if you want to overwrite it. Edits that don't pass a body never touch the description.
+
+### Cycles
+
+```sh
+plane cycle list --project WEB --status current
+plane cycle list --project WEB --archived
+plane cycle create --project WEB --name "Sprint 12" --start-date 2026-01-05 --end-date 2026-01-19 --description "Theme: auth"
+plane cycle edit "Sprint 12" --project WEB --end-date 2026-01-23
+plane cycle complete "Sprint 12" --project WEB
+plane cycle archive "Sprint 12" --project WEB
+plane cycle unarchive "Sprint 12" --project WEB
+plane cycle transfer "Sprint 12" --project WEB --to "Sprint 13"
+plane cycle issues "Sprint 12" --project WEB
+plane cycle add-issue "Sprint 12" --project WEB --issue WEB-123
+plane cycle remove-issue "Sprint 12" --project WEB --issue WEB-123
+plane cycle delete "Sprint 12" --project WEB --yes
+```
+
+Unless noted, cycles are matched by name or UUID, case-insensitively.
+
+- `create` needs `--name`. `--start-date` and `--end-date` are `YYYY-MM-DD`, and the start cannot be later than the end. `--owned-by` takes a user UUID.
+- `edit` takes the same fields. It sends only the flags you pass, keeps the current owner, and reports the fields the server did not apply.
+- `complete` ends the cycle now and refuses to run when the start date is still in the future.
+- `--archived` on `list` shows archived cycles instead; the `--status` filter does not apply there.
+- `delete` requires `--yes`.
+- `transfer` moves every issue to the destination cycle; the two cycles must differ.
+- `add-issue` and `remove-issue` take the work item id (e.g. `WEB-123`) and check that it belongs to the same project.
+- `--description "text"` or `--description-file <path>` (`-` reads stdin) sets the description. Cycle descriptions are plain text, not the rich HTML used by work items.
+- Writes read the cycle back before reporting success; `--json` returns the cycle from that read-back.
 
 ## Output and exit codes
 

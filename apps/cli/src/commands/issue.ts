@@ -25,7 +25,7 @@ interface State {
   group: string;
   sequence?: number;
 }
-interface Named {
+export interface Named {
   id: string;
   name?: string;
   display_name?: string;
@@ -46,13 +46,13 @@ interface Comment {
   id: string;
   comment_html?: string;
 }
-interface Ctx {
+export interface Ctx {
   client: Client;
   ws: string;
   url: string;
   project: string | undefined;
 }
-interface Opts {
+export interface Opts {
   workspace?: string;
   project?: string;
   title?: string;
@@ -69,6 +69,7 @@ interface Opts {
   limit?: string;
   web?: boolean;
   force?: boolean;
+  yes?: boolean;
 }
 
 const PRIORITIES = ["urgent", "high", "medium", "low", "none"];
@@ -77,7 +78,7 @@ const REF = /^([A-Za-z][A-Za-z0-9_]*)-(\d+)$/;
 // ---------- helpers ----------
 const collect = (v: string, a: string[] = []) => [...a, v];
 
-const ctxOf = (cmd: Command, o: Opts): Ctx => {
+export const ctxOf = (cmd: Command, o: Opts): Ctx => {
   const { client, resolved } = getClient(cmd);
   const ws = o.workspace ?? resolved.workspace;
   if (!ws) throw usageError("no workspace; pass --workspace or run `plane config set workspace <slug>`");
@@ -118,23 +119,23 @@ const resolveProject = (c: Ctx, ref = c.project): Promise<Project> => {
   return resolveProjectRef(c.client, c.ws, ref);
 };
 
-const base = (c: Ctx, p: Project) => `workspaces/${c.ws}/projects/${p.id}`;
+export const base = (c: Ctx, p: Project) => `workspaces/${c.ws}/projects/${p.id}`;
 const states = (c: Ctx, p: Project) => fetchAll<State>(c.client, `${base(c, p)}/states/`);
 const labels = (c: Ctx, p: Project) => fetchAll<Named>(c.client, `${base(c, p)}/labels/`);
-const members = (c: Ctx, p: Project) => c.client.get<Named[]>(`${base(c, p)}/members/`);
+export const members = (c: Ctx, p: Project) => c.client.get<Named[]>(`${base(c, p)}/members/`);
 
-const personName = (m: Named) => m.display_name ?? m.name ?? m.email ?? m.id;
+export const personName = (m: Named) => m.display_name ?? m.name ?? m.email ?? m.id;
 const resolveAssignee = async (c: Ctx, q: string, all: Named[]): Promise<string> => {
   if (q === "me") return (await c.client.get<{ id: string }>("users/me/", { expect: ["id"] })).id;
   if (isUuid(q)) return q;
   return pick("assignee", q, all, (m) => [personName(m), m.email ?? ""]).id;
 };
 
-const identifierOf = (p: Project, i: Issue) => `${p.identifier}-${i.sequence_id}`;
-const urlOf = (c: Ctx, id: string) => `${c.url}/${c.ws}/browse/${id}/`;
+export const identifierOf = (p: Project, i: Issue) => `${p.identifier}-${i.sequence_id}`;
+export const urlOf = (c: Ctx, id: string) => `${c.url}/${c.ws}/browse/${id}/`;
 
 /** `PROJ-123` (or a bare number with a project) -> the issue plus its project. */
-const fetchIssue = async (c: Ctx, ref: string): Promise<{ issue: Issue; project: Project }> => {
+export const fetchIssue = async (c: Ctx, ref: string): Promise<{ issue: Issue; project: Project }> => {
   let ident = ref.replace(/^[A-Za-z][A-Za-z0-9_]*(?=-\d+$)/, (m) => m.toUpperCase());
   if (/^\d+$/.test(ref)) ident = `${(await resolveProject(c)).identifier}-${ref}`;
   if (!REF.test(ident)) throw usageError(`"${ref}" is not a work item id (expected e.g. PROJ-123)`);
@@ -151,7 +152,7 @@ const readStdin = async () => {
 };
 
 /** Markdown from --body / --body-file / `-` (stdin) / $EDITOR (TTY only); undefined when not given and not asked. */
-const readBody = async (o: Opts, opts: { editor: boolean }): Promise<string | undefined> => {
+export const readBody = async (o: Opts, opts: { editor: boolean }): Promise<string | undefined> => {
   let md: string | undefined;
   if (o.body !== undefined && o.bodyFile !== undefined) throw usageError("use only one of --body and --body-file");
   if (o.body === "-" || o.bodyFile === "-") md = await readStdin();
@@ -392,6 +393,15 @@ const edit = async (ref: string, o: Opts, cmd: Command) => {
   success(`Updated ${id}: ${changes.join(", ")}`, "updated", { ...updated, identifier: id, url: urlOf(c, id) });
 };
 
+const deleteIssue = async (ref: string, o: Opts, cmd: Command) => {
+  if (!o.yes) throw usageError("deletion requires --yes");
+  const c = ctxOf(cmd, o);
+  const { issue, project: p } = await fetchIssue(c, ref);
+  const id = identifierOf(p, issue);
+  await c.client.delete(`${base(c, p)}/work-items/${issue.id}/`);
+  success(`Deleted ${id}`, "deleted", { id, identifier: id, url: urlOf(c, id), deleted: true });
+};
+
 const comment = async (ref: string, o: Opts, cmd: Command) => {
   const c = ctxOf(cmd, o);
   const md = await readBody(o, { editor: true });
@@ -438,14 +448,21 @@ const transition = (group: "completed" | "unstarted", past: string) => async (re
   });
 };
 
-const common = (c: Command) =>
+export const common = (c: Command) =>
   c
     .option("--workspace <slug>", "workspace slug (default: config)")
     .option("--project <id>", "project identifier or uuid");
-const body = (c: Command) =>
+export const body = (c: Command) =>
   c
     .option("--body <markdown>", "Markdown body (`-` reads stdin)")
     .option("--body-file <path>", "read Markdown body from a file (`-` = stdin)");
+
+/** The `issue` command must be registered before its subcommand groups attach to it. */
+export const findIssueGroup = (program: Command): Command => {
+  const issue = program.commands.find((c) => c.name() === "issue");
+  if (!issue) throw new Error("registerIssue must run before issue subcommand groups");
+  return issue;
+};
 
 export const registerIssue = (program: Command) => {
   const issue = program.command("issue").description("Manage work items (bodies are Markdown)");
@@ -467,6 +484,9 @@ export const registerIssue = (program: Command) => {
   common(issue.command("view <id>").description("Show a work item, e.g. PROJ-123"))
     .option("--web", "open in the browser")
     .action(run(view));
+  common(issue.command("delete <id>").description("Delete a work item"))
+    .option("--yes", "confirm deletion")
+    .action(run(deleteIssue));
   body(
     fields(common(issue.command("create").description("Create a work item")).option("-t, --title <title>", "title"))
   ).action(run(create));
