@@ -18,13 +18,14 @@ const buildProgram = (): Command => {
     .option("--json", "machine-readable JSON output")
     .option("-q, --quiet", "suppress the success line (failures are always printed)")
     .option("--debug", "print stack traces and HTTP debug logs to stderr")
+    .option("--raw-html", "keep the original rich HTML alongside derived Markdown in read output")
     .option("--host <host>", "use the stored login for this server")
     .showHelpAfterError(false)
     .exitOverride()
     .configureOutput({ outputError: () => undefined })
     .hook("preAction", (cmd) => {
-      const g = cmd.optsWithGlobals<{ json?: boolean; quiet?: boolean; debug?: boolean }>();
-      setOutput({ json: !!g.json, quiet: !!g.quiet, debug: !!g.debug });
+      const g = cmd.optsWithGlobals<{ json?: boolean; quiet?: boolean; debug?: boolean; rawHtml?: boolean }>();
+      setOutput({ json: !!g.json, quiet: !!g.quiet, debug: !!g.debug, rawHtml: !!g.rawHtml });
     });
   for (const register of commands) register(program);
   return program;
