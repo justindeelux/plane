@@ -10,8 +10,11 @@ import { registerAuth } from "./auth";
 import { registerConfig } from "./config";
 import { registerCycle } from "./cycle";
 import { registerIssue } from "./issue";
+import { registerLabel } from "./label";
+import { registerMember } from "./member";
 import { registerModule } from "./module";
 import { registerProject } from "./project";
+import { registerState } from "./state";
 
 /** Add a command by importing its `register*` function and listing it here; no other file changes. */
 export const commands: Array<(program: Command) => void> = [
@@ -22,4 +25,7 @@ export const commands: Array<(program: Command) => void> = [
   registerCycle,
   registerModule,
   registerIssue,
+  registerState,
+  registerLabel,
+  registerMember,
 ];

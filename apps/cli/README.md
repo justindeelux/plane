@@ -61,15 +61,18 @@ plane --host plane.example.com project list
 plane auth login | status | logout | token
 plane config get <key> | set <key> <value> | list
 plane api <path>
-plane project list | view [project]
+plane project list | view [project] | create | edit [project] | archive [project] | unarchive [project] | delete [project]
 plane issue list | view <id> | create | edit <id> | comment <id> | close <id> | reopen <id>
 plane cycle list | view <cycle>
 plane module list | view <module>
+plane state list | view <state> | create | edit <state> | delete <state>
+plane label list | view <label> | create | edit <label> | delete <label>
+plane member list
 ```
 
 Global options: `--json`, `-q/--quiet`, `--debug`, `--host <host>`, `-V/--version`, `-h/--help`.
 
-`project`, `cycle`, `module` and `issue` commands take `--workspace <slug>`. `cycle`, `module` and `issue` also take `--project` (`issue` accepts an identifier or UUID; `cycle` and `module` also accept a name). Both default to the values in your config (`plane config set project <identifier>`).
+`project`, `cycle`, `module`, `issue`, `state`, `label` and `member` commands take `--workspace <slug>`. All except `project` also take `--project` (`issue` accepts an identifier or UUID; `cycle` and `module` also accept a name). Both default to the values in your config (`plane config set project <identifier>`).
 
 ```sh
 plane project list
@@ -77,7 +80,37 @@ plane project view WEB
 plane cycle list --project WEB --status current
 plane cycle view "Sprint 12" --project WEB --issues --limit 20
 plane module list --project WEB
+plane state list --project WEB
+plane label list --project WEB
+plane member list --project WEB
 ```
+
+### Projects, states and labels
+
+`project create` needs `--name` and `--identifier`. `project edit`, `archive`, `unarchive` and `delete` take the project as an optional argument (identifier, name or UUID), defaulting to the configured project. Deleting or archiving a project only changes data after the server confirms it on read-back.
+
+```sh
+plane project create --name "Web App" --identifier WEB --description "Customer web app" --cycles true
+plane project edit WEB --name "Web Platform" --timezone Asia/Tokyo
+plane project archive WEB
+plane project unarchive WEB
+plane project delete WEB --yes
+```
+
+`state` and `label` commands work on the project from `--project`. Create needs `--name` and `--color`; `state create` also needs `--group` (`backlog|unstarted|started|completed|cancelled`). `--description` and `--description-file` take plain Markdown text.
+
+```sh
+plane state create --project WEB --name Review --color "#f59e0b" --group started
+plane state edit "Review" --project WEB --default true
+plane state delete "Review" --project WEB --yes
+plane label create --project WEB --name "needs-design" --color "#5e6ad2"
+plane label edit "needs-design" --project WEB --name design
+plane label delete design --project WEB --yes
+```
+
+`member list` prints the project members. Project, state and label names are matched case-insensitively, like states and labels elsewhere in the CLI.
+
+Deletion requires `--yes` on the `project`, `state` and `label` delete commands; without it the CLI stops before sending anything.
 
 `plane api` calls any endpoint under `/api/v1` and does no Markdown conversion. `-X` sets the method; `-f key=value` adds a field (a JSON body, or the query string for GET):
 
