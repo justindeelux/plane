@@ -62,14 +62,18 @@ plane auth login | status | logout | token
 plane config get <key> | set <key> <value> | list
 plane api <path>
 plane project list | view [project]
-plane issue list | view <id> | create | edit <id> | comment <id> | close <id> | reopen <id>
+plane issue list | view <id> | create | edit <id> | comment <id> | close <id> | reopen <id> | delete <id>
+plane issue dependency list <id> | add <id> | remove <id>
+plane issue link list <id> | view <id> <link> | add <id> | edit <id> <link> | delete <id> <link>
+plane issue activity list <id>
+plane comment list <issue> | view <issue> <comment> | edit <issue> <comment> | delete <issue> <comment>
 plane cycle list | view <cycle>
 plane module list | view <module>
 ```
 
 Global options: `--json`, `-q/--quiet`, `--debug`, `--host <host>`, `-V/--version`, `-h/--help`.
 
-`project`, `cycle`, `module` and `issue` commands take `--workspace <slug>`. `cycle`, `module` and `issue` also take `--project` (`issue` accepts an identifier or UUID; `cycle` and `module` also accept a name). Both default to the values in your config (`plane config set project <identifier>`).
+`project`, `cycle`, `module`, `issue` and `comment` commands take `--workspace <slug>`. `cycle`, `module`, `issue` and `comment` also take `--project` (`issue` accepts an identifier or UUID; `cycle` and `module` also accept a name). Both default to the values in your config (`plane config set project <identifier>`).
 
 ```sh
 plane project list
@@ -100,6 +104,7 @@ plane issue edit WEB-123 --state Done --remove-label bug --remove-assignee alice
 plane issue comment WEB-123 --body-file notes.md
 plane issue close WEB-123
 plane issue reopen WEB-123
+plane issue delete WEB-123 --yes
 ```
 
 Flags:
@@ -110,8 +115,33 @@ Flags:
 - `edit`: `-t, --title`, `--state`, `--priority`, `--assignee`, `--label`, `--remove-assignee`, `--remove-label` (all repeatable except title, state and priority), `--body`, `--body-file`, `--force`.
 - `comment`: `--body`, `--body-file`.
 - `close` and `reopen`: move the item to the first completed or unstarted state. `--state <name>` picks a specific state. If the item is already there, the command says so and exits 0.
+- `delete`: `--yes` is required.
 
 Names for states, labels and assignees are matched case-insensitively. A near miss prints a "did you mean" hint. `me` as an assignee means the logged-in user.
+
+#### Comments, links, dependencies and activity
+
+```sh
+plane comment list WEB-123
+plane comment view WEB-123 <comment-id>
+plane comment edit WEB-123 <comment-id> --body "Updated text"
+plane comment delete WEB-123 <comment-id> --yes
+
+plane issue link list WEB-123
+plane issue link add WEB-123 --url https://example.com/design --title Design
+plane issue link edit WEB-123 <link-id> --title "Design doc"
+plane issue link view WEB-123 <link-id>
+plane issue link delete WEB-123 <link-id> --yes
+
+plane issue dependency list WEB-123
+plane issue dependency add WEB-123 --target WEB-124 --type blocked_by
+plane issue activity list WEB-123
+```
+
+- Comment bodies are Markdown and use the same `--body` / `--body-file` rules as issue bodies. Listing and viewing print Markdown; `--json` carries `body_markdown`.
+- Link add/edit require an HTTP(S) URL; `--title` is optional. Deletes require `--yes`.
+- Dependencies use one of `blocking`, `blocked_by`, `relates_to`, `duplicate`, `start_before`, `start_after`, `finish_before`, `finish_after` (default `blocked_by`). `--target-project` resolves a bare target number from another project. The v1 API has no route to remove a dependency, so `remove` explains that and exits non-zero.
+- Activity lists work item changes with the actor, field and old/new value.
 
 `list` filters run in the CLI, because the v1 API has no server-side filters. The CLI pages through the project's items (100 per request) until it has `--limit` matches, so a filter that matches little in a large project can use many requests and hit the 60 per minute API-key limit. The CLI retries on 429; raise `API_KEY_RATE_LIMIT` on your server if it keeps happening.
 

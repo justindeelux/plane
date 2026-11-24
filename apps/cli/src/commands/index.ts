@@ -5,11 +5,15 @@
  */
 
 import type { Command } from "commander";
+import { registerActivity } from "./activity";
 import { registerApi } from "./api";
 import { registerAuth } from "./auth";
+import { registerComment } from "./comment";
 import { registerConfig } from "./config";
 import { registerCycle } from "./cycle";
+import { registerDependency } from "./dependency";
 import { registerIssue } from "./issue";
+import { registerLink } from "./link";
 import { registerModule } from "./module";
 import { registerProject } from "./project";
 
@@ -22,4 +26,8 @@ export const commands: Array<(program: Command) => void> = [
   registerCycle,
   registerModule,
   registerIssue,
+  registerComment,
+  registerDependency,
+  registerLink,
+  registerActivity,
 ];
