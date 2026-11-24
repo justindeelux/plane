@@ -11,7 +11,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Command } from "commander";
 import { hasLossyHtml, htmlToMarkdown, markdownToHtml } from "@plane/markdown";
-import type { Client, Page } from "../client";
+import type { Client } from "../client";
 import { fetchAll, isUuid, resolveProject as resolveProjectRef, type Project } from "../resolve";
 import { getClient } from "../context";
 import { CliError, EXIT, usageError } from "../errors";
@@ -31,15 +31,23 @@ export interface Named {
   display_name?: string;
   email?: string;
 }
+interface IssueState {
+  id?: string;
+  name?: string;
+  group?: string;
+}
 export interface Issue {
   id: string;
   name: string;
   sequence_id: number;
   project: string;
-  state?: string | null;
+  state?: string | IssueState | null;
   priority?: string | null;
   assignees?: string[];
   labels?: string[];
+  parent?: string | IssueState | null;
+  start_date?: string | null;
+  target_date?: string | null;
   description_html?: string | null;
 }
 interface Comment {
@@ -70,9 +78,21 @@ export interface Opts {
   web?: boolean;
   force?: boolean;
   yes?: boolean;
+  open?: boolean;
+  group?: string[];
+  parent?: string;
+  rootOnly?: boolean;
+  query?: string;
+  clearParent?: boolean;
+  startDate?: string;
+  targetDate?: string;
+  clearDates?: boolean;
 }
 
 const PRIORITIES = ["urgent", "high", "medium", "low", "none"];
+const GROUPS = ["backlog", "unstarted", "started", "completed", "cancelled"];
+const GROUPS_WITH_TRIAGE = [...GROUPS, "triage"];
+const OPEN_GROUPS = ["backlog", "unstarted", "started"];
 const REF = /^([A-Za-z][A-Za-z0-9_]*)-(\d+)$/;
 
 // ---------- helpers ----------
@@ -199,12 +219,72 @@ const checkPriority = (p?: string) => {
   return p?.toLowerCase();
 };
 
+const idOf = (v?: string | IssueState | null) => (v && typeof v === "object" ? (v.id ?? null) : (v ?? null));
+const stateIdOf = (s: Issue["state"]) => idOf(s);
+const parentIdOf = (p: Issue["parent"]) => idOf(p);
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const isDate = (s: string) => {
+  if (!ISO_DATE.test(s)) return false;
+  const d = new Date(`${s}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
+};
+const day = (v?: string | null) => (v ? v.slice(0, 10) : null);
+
+/** start_date / target_date from the write flags, validated before anything is sent. */
+const dateFields = (o: Opts) => {
+  if (o.clearDates && (o.startDate !== undefined || o.targetDate !== undefined))
+    throw usageError("--clear-dates cannot be combined with --start-date or --target-date");
+  const data: Record<string, string | null> = {};
+  if (o.startDate !== undefined) data.start_date = o.startDate;
+  if (o.targetDate !== undefined) data.target_date = o.targetDate;
+  if (o.clearDates) Object.assign(data, { start_date: null, target_date: null });
+  for (const [key, flag] of [
+    ["start_date", "--start-date"],
+    ["target_date", "--target-date"],
+  ] as const) {
+    const v = data[key];
+    if (typeof v === "string" && !isDate(v)) throw usageError(`${flag} must be a date, YYYY-MM-DD`);
+  }
+  if (typeof data.start_date === "string" && typeof data.target_date === "string" && data.start_date > data.target_date)
+    throw usageError("--start-date must not be later than --target-date");
+  return data;
+};
+
+/** Parent id in the same project; a UUID is read through the project to prove it belongs there. */
+const parentRef = async (c: Ctx, p: Project, ref: string): Promise<string> => {
+  if (isUuid(ref)) {
+    const rec = await c.client.get<Issue>(`${base(c, p)}/work-items/${ref}/`, { expect: ["id"] });
+    return rec.id;
+  }
+  const { issue, project } = await fetchIssue(c, ref);
+  if (project.id !== p.id)
+    throw usageError(`parent ${ref} belongs to ${project.identifier ?? project.id}, not ${p.identifier}`);
+  return issue.id;
+};
+
+/** Walk the parent chain; reaching the edited item (or a repeat) is a cycle. */
+const checkHierarchy = async (c: Ctx, p: Project, issueId: string | undefined, parent: string) => {
+  const seen = new Set<string>(issueId ? [issueId] : []);
+  let cur: string | null = parent;
+  while (cur) {
+    if (seen.has(cur)) throw usageError("parent assignment would create a hierarchy cycle");
+    seen.add(cur);
+    const rec = await c.client.get<Issue>(`${base(c, p)}/work-items/${cur}/`, { expect: ["id"] });
+    cur = parentIdOf(rec.parent);
+  }
+};
+
+const parentFlag = (o: Opts) => {
+  if (o.parent !== undefined && o.clearParent) throw usageError("use only one of --parent and --clear-parent");
+};
+
 const summary = (c: Ctx, p: Project, i: Issue, st: State[], lb: Named[], mem: Named[]) => {
   const id = identifierOf(p, i);
   return {
     id,
     title: i.name,
-    state: st.find((s) => s.id === i.state)?.name ?? "",
+    state: st.find((s) => s.id === stateIdOf(i.state))?.name ?? "",
     priority: i.priority ?? "none",
     assignees: (i.assignees ?? []).map((a) => personName(mem.find((m) => m.id === a) ?? { id: a })),
     labels: (i.labels ?? []).map((l) => lb.find((x) => x.id === l)?.name ?? l),
@@ -219,12 +299,20 @@ const list = async (o: Opts, cmd: Command) => {
   const [st, lb, mem] = await Promise.all([states(c, p), labels(c, p), members(c, p)]);
   const limit = o.limit === undefined ? 30 : Number(o.limit);
   if (!Number.isInteger(limit) || limit < 1) throw usageError("--limit must be a positive integer");
+  if (o.parent !== undefined && o.rootOnly) throw usageError("use only one of --parent and --root-only");
+
+  const groups = new Set(o.group ?? []);
+  if (o.open) for (const g of OPEN_GROUPS) groups.add(g);
+  for (const g of groups)
+    if (!GROUPS_WITH_TRIAGE.includes(g)) throw usageError(`--group must be one of ${GROUPS_WITH_TRIAGE.join(", ")}`);
 
   const stateIds = o.state ? [pick("state", o.state, st, (s) => [s.name]).id] : undefined;
   const labelIds = o.label?.length ? o.label.map((l) => pick("label", l, lb, (x) => [x.name ?? ""]).id) : undefined;
   const assigneeIds = o.assignee?.length
     ? await Promise.all(o.assignee.map((a) => resolveAssignee(c, a, mem)))
     : undefined;
+  const parentId = o.parent !== undefined ? await parentRef(c, p, o.parent) : undefined;
+  const query = o.query?.toLowerCase();
 
   let path = `${base(c, p)}/work-items/`;
   if (o.cycle || o.module) {
@@ -235,23 +323,35 @@ const list = async (o: Opts, cmd: Command) => {
     path = `${base(c, p)}/${kind}/${hit.id}/${o.cycle ? "cycle" : "module"}-issues/`;
   }
 
-  const match = (i: Issue) =>
-    (!stateIds || stateIds.includes(i.state ?? "")) &&
-    (!labelIds || labelIds.every((l) => i.labels?.includes(l))) &&
-    (!assigneeIds || assigneeIds.some((a) => i.assignees?.includes(a)));
-
-  // The v1 list endpoint has no filters, so filter client-side while paging.
-  const found: Issue[] = [];
-  let cursor: string | undefined;
-  do {
-    const page = await c.client.get<Page<Issue>>(path, { query: { per_page: 100, cursor } });
-    if (!Array.isArray(page.results)) {
-      throw new CliError(`GET ${path} returned an unexpected shape`, EXIT.general, "malformed_response");
+  const groupsById = new Map(st.map((s) => [s.id, s.group]));
+  const groupOf = (i: Issue) => {
+    const s = i.state;
+    if (s && typeof s === "object") return s.group ?? (s.id ? groupsById.get(s.id) : undefined);
+    return s ? groupsById.get(s) : undefined;
+  };
+  const match = (i: Issue) => {
+    if (stateIds && !stateIds.includes(stateIdOf(i.state) ?? "")) return false;
+    if (groups.size) {
+      const group = groupOf(i);
+      if (group === undefined)
+        throw new CliError(
+          `${identifierOf(p, i)} has an unknown state group; refusing an incomplete filtered result`,
+          EXIT.general,
+          "unknown_state_group"
+        );
+      if (!groups.has(group)) return false;
     }
-    found.push(...page.results.filter(match));
-    cursor = page.next_page_results ? page.next_cursor : undefined;
-  } while (cursor && found.length < limit);
+    if (labelIds && !labelIds.every((l) => i.labels?.includes(l))) return false;
+    if (assigneeIds && !assigneeIds.some((a) => i.assignees?.includes(a))) return false;
+    if (parentId !== undefined && parentIdOf(i.parent) !== parentId) return false;
+    if (o.rootOnly && parentIdOf(i.parent)) return false;
+    if (query && !`${i.name} ${htmlToMarkdown(i.description_html ?? "")}`.toLowerCase().includes(query)) return false;
+    return true;
+  };
 
+  // The v1 list endpoint has no filters: follow every cursor, then filter.
+  const all = await fetchAll<Issue>(c.client, path, { expand: "state" });
+  const found = all.filter(match);
   const rows = found.slice(0, limit).map((i) => summary(c, p, i, st, lb, mem));
   printList(
     "issues",
@@ -290,6 +390,8 @@ const create = async (o: Opts, cmd: Command) => {
   const p = await resolveProject(c);
   if (!o.title) throw usageError("--title is required");
   const priority = checkPriority(o.priority);
+  parentFlag(o);
+  const dates = dateFields(o);
   const md = await readBody(o, { editor: true });
   const payload: Record<string, unknown> = { name: o.title };
   if (md !== undefined) payload.description_html = markdownToHtml(md);
@@ -303,6 +405,14 @@ const create = async (o: Opts, cmd: Command) => {
     const mem = await members(c, p);
     payload.assignees = await Promise.all(o.assignee.map((a) => resolveAssignee(c, a, mem)));
   }
+  if (o.parent !== undefined) {
+    const parent = await parentRef(c, p, o.parent);
+    await checkHierarchy(c, p, undefined, parent);
+    payload.parent = parent;
+  } else if (o.clearParent) {
+    payload.parent = null;
+  }
+  Object.assign(payload, dates);
   // One atomic request carries state/labels/assignees, so create cannot half-succeed.
   const issue = await c.client.post<Issue>(`${base(c, p)}/work-items/`, payload, {
     expect: ["id", "sequence_id", "name"],
@@ -316,6 +426,8 @@ const edit = async (ref: string, o: Opts, cmd: Command) => {
   const { issue, project: p } = await fetchIssue(c, ref);
   const id = identifierOf(p, issue);
   const priority = checkPriority(o.priority);
+  parentFlag(o);
+  const dates = dateFields(o);
   const md = await readBody(o, { editor: false });
   const [st, lb, mem] = await Promise.all([states(c, p), labels(c, p), members(c, p)]);
 
@@ -331,10 +443,30 @@ const edit = async (ref: string, o: Opts, cmd: Command) => {
   }
   if (o.state) {
     const target = pick("state", o.state, st, (s) => [s.name]);
-    if (target.id !== issue.state) {
+    if (target.id !== stateIdOf(issue.state)) {
       patch.state = target.id;
-      changes.push(`state ${st.find((s) => s.id === issue.state)?.name ?? "-"} -> ${target.name}`);
+      changes.push(`state ${st.find((s) => s.id === stateIdOf(issue.state))?.name ?? "-"} -> ${target.name}`);
     }
+  }
+  const currentParent = parentIdOf(issue.parent);
+  let nextParent: string | null | undefined;
+  if (o.parent !== undefined) nextParent = await parentRef(c, p, o.parent);
+  else if (o.clearParent) nextParent = null;
+  if (nextParent !== undefined && nextParent !== currentParent) {
+    if (nextParent) await checkHierarchy(c, p, issue.id, nextParent);
+    patch.parent = nextParent;
+    changes.push(nextParent ? `parent ${currentParent ?? "-"} -> ${nextParent}` : "parent cleared");
+  }
+  for (const [key, label] of [
+    ["start_date", "start date"],
+    ["target_date", "target date"],
+  ] as const) {
+    if (!(key in dates)) continue;
+    const next = dates[key]!;
+    const current = day(issue[key]);
+    if (current === next) continue;
+    patch[key] = next;
+    changes.push(next === null ? `${label} cleared` : `${label} ${current ?? "-"} -> ${next}`);
   }
   const nameOfLabel = (l: string) => lb.find((x) => x.id === l)?.name ?? l;
   const nameOfPerson = (a: string) => personName(mem.find((m) => m.id === a) ?? { id: a });
@@ -382,9 +514,12 @@ const edit = async (ref: string, o: Opts, cmd: Command) => {
     [
       ["name", updated.name === patch.name],
       ["priority", updated.priority === patch.priority],
-      ["state", updated.state === patch.state],
+      ["state", stateIdOf(updated.state) === patch.state],
       ["labels", same(updated.labels, patch.labels as string[])],
       ["assignees", same(updated.assignees, patch.assignees as string[])],
+      ["parent", parentIdOf(updated.parent) === ((patch.parent as string | null | undefined) ?? null)],
+      ["start_date", day(updated.start_date) === ((patch.start_date as string | null | undefined) ?? null)],
+      ["target_date", day(updated.target_date) === ((patch.target_date as string | null | undefined) ?? null)],
     ] as const
   ).filter(([k, ok]) => k in patch && !ok);
   if (bad.length) {
@@ -471,12 +606,22 @@ export const registerIssue = (program: Command) => {
       .option("--state <name>", "state name")
       .option("--priority <p>", PRIORITIES.join("|"))
       .option("--assignee <user>", "assignee name, uuid or `me` (repeatable)", collect)
-      .option("--label <name>", "label name (repeatable)", collect);
+      .option("--label <name>", "label name (repeatable)", collect)
+      .option("--parent <id>", "parent work item (PROJ-123)")
+      .option("--clear-parent", "remove the parent")
+      .option("--start-date <date>", "start date, YYYY-MM-DD")
+      .option("--target-date <date>", "target date, YYYY-MM-DD")
+      .option("--clear-dates", "clear both dates");
 
   common(issue.command("list").description("List work items"))
     .option("--state <name>", "filter by state")
     .option("--assignee <user>", "filter by assignee (`me` ok, repeatable)", collect)
     .option("--label <name>", "filter by label (repeatable, all must match)", collect)
+    .option("--open", "only backlog, unstarted and started items (excludes triage)")
+    .option("--group <group>", `${GROUPS_WITH_TRIAGE.join("|")} (repeatable)`, collect)
+    .option("--parent <id>", "only children of this work item")
+    .option("--root-only", "only items without a parent")
+    .option("--query <text>", "case-insensitive match on title and description")
     .option("--cycle <name>", "only items in this cycle")
     .option("--module <name>", "only items in this module")
     .option("--limit <n>", "max items (default 30)")

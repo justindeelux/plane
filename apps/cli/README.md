@@ -132,10 +132,17 @@ Work items are addressed by id, such as `WEB-123`. A bare number works when a de
 ```sh
 plane issue list --project WEB --state "In Progress" --assignee me --limit 20
 plane issue list --project WEB --cycle "Sprint 12" --label bug
+plane issue list --project WEB --open
+plane issue list --project WEB --group backlog --group started
+plane issue list --project WEB --parent WEB-123
+plane issue list --project WEB --root-only
+plane issue list --project WEB --query "login error"
 plane issue view WEB-123
 plane issue view WEB-123 --web
 plane issue create --project WEB -t "Fix login redirect" --priority high --assignee me --label bug --body "Steps to reproduce..."
+plane issue create --project WEB -t "Child task" --parent WEB-100 --start-date 2026-11-01 --target-date 2026-11-07
 plane issue edit WEB-123 --state Done --remove-label bug --remove-assignee alice
+plane issue edit WEB-123 --clear-parent --clear-dates
 plane issue comment WEB-123 --body-file notes.md
 plane issue close WEB-123
 plane issue reopen WEB-123
@@ -144,13 +151,17 @@ plane issue delete WEB-123 --yes
 
 Flags:
 
-- `list`: `--state`, `--assignee` (repeatable), `--label` (repeatable, all must match), `--cycle`, `--module`, `--limit` (default 30), plus `--workspace` and `--project`.
+- `list`: `--state`, `--assignee` (repeatable), `--label` (repeatable, all must match), `--cycle`, `--module`, `--limit` (default 30), `--open`, `--group` (repeatable), `--parent`, `--root-only`, `--query`, plus `--workspace` and `--project`.
 - `view`: `--web` opens the item in your browser.
-- `create`: `-t, --title` (required), `--state`, `--priority` (`urgent|high|medium|low|none`), `--assignee` and `--label` (repeatable), `--body`, `--body-file`.
-- `edit`: `-t, --title`, `--state`, `--priority`, `--assignee`, `--label`, `--remove-assignee`, `--remove-label` (all repeatable except title, state and priority), `--body`, `--body-file`, `--force`.
+- `create`: `-t, --title` (required), `--state`, `--priority` (`urgent|high|medium|low|none`), `--assignee` and `--label` (repeatable), `--parent`, `--clear-parent`, `--start-date`, `--target-date`, `--clear-dates`, `--body`, `--body-file`.
+- `edit`: `-t, --title`, `--state`, `--priority`, `--assignee`, `--label`, `--remove-assignee`, `--remove-label` (all repeatable except title, state and priority), `--parent`, `--clear-parent`, `--start-date`, `--target-date`, `--clear-dates`, `--body`, `--body-file`, `--force`.
 - `comment`: `--body`, `--body-file`.
 - `close` and `reopen`: move the item to the first completed or unstarted state. `--state <name>` picks a specific state. If the item is already there, the command says so and exits 0.
 - `delete`: `--yes` is required.
+
+`--open` means the `backlog`, `unstarted` and `started` groups; it excludes `completed`, `cancelled` and `triage`. `--group` takes `backlog`, `unstarted`, `started`, `completed`, `cancelled` or `triage`, and repeating it widens the match. `--query` is a case-insensitive substring match on the title and the Markdown description. Filters combine with AND. `--parent` keeps the children of that work item; `--root-only` keeps items without a parent, and the two cannot be combined.
+
+`--parent` must name a work item in the same project; the CLI rejects hierarchy cycles. Dates are `YYYY-MM-DD`, and the start cannot be later than the target. `--clear-parent` and `--clear-dates` remove the value, and `--clear-dates` cannot be combined with `--start-date` or `--target-date`.
 
 Names for states, labels and assignees are matched case-insensitively. A near miss prints a "did you mean" hint. `me` as an assignee means the logged-in user.
 
@@ -178,7 +189,7 @@ plane issue activity list WEB-123
 - Dependencies use one of `blocking`, `blocked_by`, `relates_to`, `duplicate`, `start_before`, `start_after`, `finish_before`, `finish_after` (default `blocked_by`). `--target-project` resolves a bare target number from another project. The v1 API has no route to remove a dependency, so `remove` explains that and exits non-zero.
 - Activity lists work item changes with the actor, field and old/new value.
 
-`list` filters run in the CLI, because the v1 API has no server-side filters. The CLI pages through the project's items (100 per request) until it has `--limit` matches, so a filter that matches little in a large project can use many requests and hit the 60 per minute API-key limit. The CLI retries on 429; raise `API_KEY_RATE_LIMIT` on your server if it keeps happening.
+`list` filters run in the CLI, because the v1 API has no server-side filters. The CLI follows every pagination cursor (100 items per request) before filtering, then applies `--limit`, so a large project means several requests; the CLI retries on 429, and you can raise `API_KEY_RATE_LIMIT` on your server if that keeps happening.
 
 #### Bodies and Markdown
 
