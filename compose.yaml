@@ -1,0 +1,208 @@
+# Plane Community Edition for Gotham (Docker Compose source).
+#
+# Create a Compose application from this repository, choose `compose.yaml`
+# and set the web service to `proxy`. Gotham routes the domain to that service
+# and terminates HTTPS, so the bundled Caddy listens on plain HTTP only.
+#
+# Set these variables in the application (all optional except for production):
+#   WEB_URL                 public URL, e.g. https://plane.example.com
+#   CORS_ALLOWED_ORIGINS    same value as WEB_URL
+#   SECRET_KEY              openssl rand -hex 32
+#   LIVE_SERVER_SECRET_KEY  openssl rand -hex 32
+#   POSTGRES_PASSWORD, RABBITMQ_PASSWORD, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
+#
+# Gotham rules this file follows: prebuilt images only, no env_file, no
+# container_name, no top-level x-* keys, no host ports below 1024.
+# `docker-compose.yml` stays the upstream build-from-source file.
+
+services:
+  web:
+    image: makeplane/plane-frontend:${APP_RELEASE:-stable}
+    restart: unless-stopped
+    depends_on:
+      - api
+      - worker
+
+  space:
+    image: makeplane/plane-space:${APP_RELEASE:-stable}
+    restart: unless-stopped
+    depends_on:
+      - api
+      - worker
+      - web
+
+  admin:
+    image: makeplane/plane-admin:${APP_RELEASE:-stable}
+    restart: unless-stopped
+    depends_on:
+      - api
+      - web
+
+  live:
+    image: makeplane/plane-live:${APP_RELEASE:-stable}
+    restart: unless-stopped
+    stop_grace_period: 30s
+    environment:
+      API_BASE_URL: http://api:8000
+      LIVE_SERVER_SECRET_KEY: ${LIVE_SERVER_SECRET_KEY:-change-this-key-on-deployment}
+      REDIS_HOST: plane-redis
+      REDIS_PORT: "6379"
+      REDIS_URL: redis://plane-redis:6379/
+    depends_on:
+      - api
+      - web
+
+  api:
+    image: makeplane/plane-backend:${APP_RELEASE:-stable}
+    restart: unless-stopped
+    command: ./bin/docker-entrypoint-api.sh
+    volumes:
+      - logs_api:/code/plane/logs
+    # The anchor is shared by worker, beat-worker and migrator below.
+    environment: &backend-env
+      WEB_URL: ${WEB_URL:-http://localhost}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost}
+      DEBUG: "0"
+      GUNICORN_WORKERS: ${GUNICORN_WORKERS:-1}
+      SECRET_KEY: ${SECRET_KEY:-change-this-key-on-deployment}
+      LIVE_SERVER_SECRET_KEY: ${LIVE_SERVER_SECRET_KEY:-change-this-key-on-deployment}
+      API_KEY_RATE_LIMIT: ${API_KEY_RATE_LIMIT:-60/minute}
+      AUTHENTICATION_RATE_LIMIT: ${AUTHENTICATION_RATE_LIMIT:-10/minute}
+      NUM_PROXIES: ${NUM_PROXIES:-1}
+      PGHOST: plane-db
+      PGDATABASE: plane
+      POSTGRES_USER: plane
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-plane}
+      POSTGRES_DB: plane
+      POSTGRES_PORT: "5432"
+      DATABASE_URL: postgresql://plane:${POSTGRES_PASSWORD:-plane}@plane-db:5432/plane
+      REDIS_HOST: plane-redis
+      REDIS_PORT: "6379"
+      REDIS_URL: redis://plane-redis:6379/
+      REDIS_SSL_CERT_REQS: required
+      REDIS_SSL_CA_CERTS: ""
+      AMQP_URL: amqp://plane:${RABBITMQ_PASSWORD:-plane}@plane-mq:5672/plane
+      USE_MINIO: "1"
+      MINIO_ENDPOINT_SSL: "0"
+      AWS_REGION: ""
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-access-key}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-secret-key}
+      AWS_S3_ENDPOINT_URL: http://plane-minio:9000
+      AWS_S3_BUCKET_NAME: uploads
+      FILE_SIZE_LIMIT: ${FILE_SIZE_LIMIT:-5242880}
+      WEBHOOK_ALLOWED_IPS: ""
+      WEBHOOK_ALLOWED_HOSTS: ""
+    depends_on:
+      - plane-db
+      - plane-redis
+      - plane-mq
+
+  worker:
+    image: makeplane/plane-backend:${APP_RELEASE:-stable}
+    restart: unless-stopped
+    command: ./bin/docker-entrypoint-worker.sh
+    volumes:
+      - logs_worker:/code/plane/logs
+    environment: *backend-env
+    depends_on:
+      - api
+      - plane-db
+      - plane-redis
+      - plane-mq
+
+  beat-worker:
+    image: makeplane/plane-backend:${APP_RELEASE:-stable}
+    restart: unless-stopped
+    command: ./bin/docker-entrypoint-beat.sh
+    volumes:
+      - logs_beat-worker:/code/plane/logs
+    environment: *backend-env
+    depends_on:
+      - api
+      - plane-db
+      - plane-redis
+      - plane-mq
+
+  migrator:
+    image: makeplane/plane-backend:${APP_RELEASE:-stable}
+    restart: on-failure
+    command: ./bin/docker-entrypoint-migrator.sh
+    volumes:
+      - logs_migrator:/code/plane/logs
+    environment: *backend-env
+    depends_on:
+      - plane-db
+      - plane-redis
+
+  plane-db:
+    image: postgres:15.7-alpine
+    restart: unless-stopped
+    command: postgres -c 'max_connections=1000'
+    environment:
+      POSTGRES_USER: plane
+      POSTGRES_DB: plane
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-plane}
+      PGDATA: /var/lib/postgresql/data
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  plane-redis:
+    image: valkey/valkey:7.2.11-alpine
+    restart: unless-stopped
+    volumes:
+      - redisdata:/data
+
+  plane-mq:
+    image: rabbitmq:3.13.6-management-alpine
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: plane
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-plane}
+      RABBITMQ_DEFAULT_VHOST: plane
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+
+  plane-minio:
+    image: docker.io/pgsty/silo:RELEASE.2026-09-16T00-00-00Z
+    restart: unless-stopped
+    command: server /export --console-address ":9090"
+    environment:
+      MINIO_ROOT_USER: ${AWS_ACCESS_KEY_ID:-access-key}
+      MINIO_ROOT_PASSWORD: ${AWS_SECRET_ACCESS_KEY:-secret-key}
+    volumes:
+      - uploads:/export
+
+  # Web service for Gotham: path routing for web, space, admin, live, api and uploads.
+  proxy:
+    image: makeplane/plane-proxy:${APP_RELEASE:-stable}
+    restart: unless-stopped
+    expose:
+      - "80"
+    environment:
+      SITE_ADDRESS: ":80"
+      FILE_SIZE_LIMIT: ${FILE_SIZE_LIMIT:-5242880}
+      BUCKET_NAME: uploads
+      CERT_EMAIL: ""
+      CERT_ACME_DNS: ""
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-0.0.0.0/0}
+    volumes:
+      - proxy_config:/config
+      - proxy_data:/data
+    depends_on:
+      - web
+      - api
+      - space
+      - admin
+      - live
+
+volumes:
+  pgdata:
+  redisdata:
+  uploads:
+  logs_api:
+  logs_worker:
+  logs_beat-worker:
+  logs_migrator:
+  rabbitmq_data:
+  proxy_config:
+  proxy_data:
