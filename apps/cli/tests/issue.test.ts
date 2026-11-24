@@ -211,11 +211,11 @@ describe("issue view", () => {
     expect(out).toContain(`URL: https://plane.test/${currentWs()}/browse/PROJ-7/`);
     expect(out).toContain("hello **world**");
   });
-  it("--json carries raw html and body_markdown", async () => {
+  it("--json carries body_markdown and hides raw HTML by default", async () => {
     issue.description_html = "<p><em>x</em></p>";
     await plane("issue", "view", "PROJ-7", "--json");
     const j = JSON.parse(out);
-    expect(j.description_html).toBe("<p><em>x</em></p>");
+    expect(j.description_html).toBeUndefined();
     expect(j.body_markdown).toBe("_x_");
   });
   it("accepts a lowercase project identifier (prj-7 -> PROJ-7)", async () => {

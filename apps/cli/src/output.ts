@@ -10,9 +10,10 @@ export interface OutputOptions {
   json: boolean;
   quiet: boolean;
   debug: boolean;
+  rawHtml: boolean;
 }
 
-let opts: OutputOptions = { json: false, quiet: false, debug: false };
+let opts: OutputOptions = { json: false, quiet: false, debug: false, rawHtml: false };
 
 export const setOutput = (o: Partial<OutputOptions>) => {
   opts = { ...opts, ...o };

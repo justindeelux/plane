@@ -367,9 +367,16 @@ const view = async (ref: string, o: Opts, cmd: Command) => {
   const [st, lb, mem] = await Promise.all([states(c, p), labels(c, p), members(c, p)]);
   const s = summary(c, p, issue, st, lb, mem);
   const body = issue.description_html ? htmlToMarkdown(issue.description_html).trim() : "";
+  const { description_html, ...rest } = issue;
   if (o.web) openBrowser(s.url);
   if (getOutput().json) {
-    print("", { ...issue, identifier: s.id, url: s.url, body_markdown: body });
+    print("", {
+      ...rest,
+      ...(getOutput().rawHtml ? { description_html } : {}),
+      identifier: s.id,
+      url: s.url,
+      body_markdown: body,
+    });
     return;
   }
   print(
@@ -381,7 +388,7 @@ const view = async (ref: string, o: Opts, cmd: Command) => {
       `URL: ${s.url}`,
       "",
       body || "(no description)",
-    ].join("\n")
+    ].join("\n") + (getOutput().rawHtml && description_html ? `\n\nRaw HTML:\n${description_html}` : "")
   );
 };
 
